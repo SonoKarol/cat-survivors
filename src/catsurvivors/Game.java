@@ -147,6 +147,7 @@ final class Game {
         if (server != null) {
             server.close();
             server = null;
+            App.onHostStop(); // rimuovi la mappatura UPnP della porta
         }
         reset();
         state = State.MENU;

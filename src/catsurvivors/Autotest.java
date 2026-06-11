@@ -15,6 +15,7 @@ final class Autotest {
     private Autotest() {}
 
     static void run() throws Exception {
+        Util.seed(20260611L); // partita riproducibile
         Input input = new Input();
         Game game = new Game(input);
         App.init(game, input);

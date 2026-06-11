@@ -23,6 +23,11 @@ public class Main {
                 Cooptest.run();
                 return;
             }
+            if (a.equals("--netcheck")) {
+                System.setProperty("java.awt.headless", "true");
+                Netcheck.run();
+                return;
+            }
         }
 
         Input input = new Input();

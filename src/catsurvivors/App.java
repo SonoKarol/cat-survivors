@@ -18,6 +18,10 @@ final class App {
     static volatile StringBuilder ip = null; // campo IP attivo se != null
     static volatile String status = "";
     static volatile boolean connecting = false;
+    // stato del port forwarding automatico (UPnP), mostrato in lobby
+    static volatile String coopUpnp = "";
+    static volatile String coopPublic = "";
+    static volatile Upnp.Result upnp;
 
     private App() {}
 
@@ -72,6 +76,38 @@ final class App {
             game.startHosting(Cats.ALL.get(selectedCat), Net.DEFAULT_PORT);
         } catch (IOException e) {
             status = "Impossibile aprire la porta " + Net.DEFAULT_PORT + ": " + e.getMessage();
+            return;
+        }
+        // chiedi al router di inoltrare la porta verso questo PC (per gli amici fuori dalla LAN)
+        coopUpnp = "Port forwarding automatico (UPnP) in corso...";
+        coopPublic = "";
+        Thread t = new Thread(() -> {
+            Upnp.Result r = Upnp.openPort(Net.DEFAULT_PORT, Server.lanIp());
+            upnp = r;
+            if (r.mapped && r.externalIp != null) {
+                coopUpnp = "Internet: porta aperta sul router (UPnP)";
+                coopPublic = r.externalIp + ":" + Net.DEFAULT_PORT;
+            } else if (r.externalIp != null) {
+                coopUpnp = "UPnP non disponibile — apri tu la porta TCP " + Net.DEFAULT_PORT;
+                coopPublic = r.externalIp + ":" + Net.DEFAULT_PORT + " (dopo il forwarding)";
+            } else {
+                coopUpnp = r.message;
+            }
+        }, "coop-upnp");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Chiamato quando l'host torna al menu: rimuove la mappatura UPnP. */
+    static void onHostStop() {
+        Upnp.Result r = upnp;
+        upnp = null;
+        coopUpnp = "";
+        coopPublic = "";
+        if (r != null && r.mapped) {
+            Thread t = new Thread(() -> Upnp.closePort(r), "coop-upnp-close");
+            t.setDaemon(true);
+            t.start();
         }
     }
 
