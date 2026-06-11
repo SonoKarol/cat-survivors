@@ -18,10 +18,16 @@ public class Main {
                 Autotest.run();
                 return;
             }
+            if (a.equals("--cooptest")) {
+                System.setProperty("java.awt.headless", "true");
+                Cooptest.run();
+                return;
+            }
         }
 
         Input input = new Input();
         Game game = new Game(input);
+        App.init(game, input);
 
         final Canvas[] canvasRef = new Canvas[1];
         EventQueue.invokeAndWait(() -> {
@@ -58,15 +64,21 @@ public class Main {
             int w = Math.max(1, canvas.getWidth());
             int h = Math.max(1, canvas.getHeight());
 
-            game.step(dt, w, h);
+            Client client = App.client;
+            boolean clientMode = App.mode == App.Mode.CLIENT && client != null;
+            if (!clientMode) game.step(dt, w, h);
 
             do {
                 do {
                     Graphics2D g = (Graphics2D) bs.getDrawGraphics();
                     g.setColor(new Color(0x131a12));
                     g.fillRect(0, 0, w, h);
-                    game.render(g, w, h);
-                    Ui.draw(game, g, w, h);
+                    if (clientMode) {
+                        ClientView.frame(client, input, g, w, h);
+                    } else {
+                        game.render(g, w, h);
+                        Ui.draw(game, g, w, h);
+                    }
                     g.dispose();
                 } while (bs.contentsRestored());
                 bs.show();

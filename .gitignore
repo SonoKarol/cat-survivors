@@ -3,9 +3,10 @@ out/
 dist/
 *.class
 
-# Output dell'autotest
+# Output dei test automatici
 autotest.png
 autotest-menu.png
+cooptest-client.png
 
 # IDE
 .idea/

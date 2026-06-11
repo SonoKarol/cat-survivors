@@ -6,7 +6,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Il gatto controllato dal giocatore. */
+/**
+ * Un gatto in partita. L'input arriva dai campi inMove/inAim, riempiti
+ * dall'Input locale (host/solo) o dai messaggi di rete (giocatori remoti).
+ */
 final class Player {
     /** Un'arma posseduta, con livello e timer di ricarica. */
     static final class WeaponInst {
@@ -21,8 +24,13 @@ final class Player {
 
     final Game game;
     final CatDef cat;
+    int pid = 0;
+    boolean alive = true;
     double x, y;
     final double r = 13;
+    // input del frame corrente (locale o di rete)
+    double inMoveX, inMoveY, inAimX, inAimY;
+    // direzione di mira normalizzata: segue il cursore, guida armi e sprite
     double faceX = 1, faceY = 0;
     int level = 1;
     double xp = 0, xpNext;
@@ -73,15 +81,17 @@ final class Player {
     }
 
     void update(double dt) {
-        double[] a = game.input.axis();
-        moving = a[0] != 0 || a[1] != 0;
-        if (moving) {
-            faceX = a[0];
-            faceY = a[1];
-            walkT += dt * 9;
+        moving = inMoveX != 0 || inMoveY != 0;
+        if (moving) walkT += dt * 9;
+        x += inMoveX * stats.speed * dt;
+        y += inMoveY * stats.speed * dt;
+        // la mira segue il cursore (o l'ultima direzione valida)
+        double alen = Math.hypot(inAimX, inAimY);
+        if (alen > 0.01) {
+            faceX = inAimX / alen;
+            faceY = inAimY / alen;
         }
-        x += a[0] * stats.speed * dt;
-        y += a[1] * stats.speed * dt;
+        if (!alive) return; // i fantasmi osservano, non combattono
         if (iframe > 0) iframe -= dt;
         if (stats.regen > 0) hp = Math.min(stats.maxHp, hp + stats.regen * dt);
         auraPulse = Math.max(0, auraPulse - dt * 3);
@@ -96,6 +106,7 @@ final class Player {
     }
 
     void gainXp(double v) {
+        if (!alive) return;
         xp += v * stats.xpGain;
         while (xp >= xpNext) {
             xp -= xpNext;
@@ -106,7 +117,7 @@ final class Player {
     }
 
     void takeDamage(double dmg) {
-        if (iframe > 0) return;
+        if (!alive || iframe > 0) return;
         double d = Math.max(1, Math.round(dmg - stats.armor));
         hp -= d;
         iframe = 0.7;
@@ -115,7 +126,7 @@ final class Player {
         game.shake = Math.min(8, game.shake + 4);
         if (hp <= 0) {
             hp = 0;
-            game.gameOver();
+            game.onPlayerDown(this);
         }
     }
 }

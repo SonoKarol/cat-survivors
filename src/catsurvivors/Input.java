@@ -24,12 +24,18 @@ final class Input {
     volatile int mouseX = -1, mouseY = -1;
     volatile boolean focusLost = false;
 
+    private final Queue<Character> typed = new ConcurrentLinkedQueue<>();
+
     final KeyAdapter keyListener = new KeyAdapter() {
         @Override public void keyPressed(KeyEvent e) {
             if (keys.add(e.getKeyCode())) presses.add(e.getKeyCode());
         }
         @Override public void keyReleased(KeyEvent e) {
             keys.remove(e.getKeyCode());
+        }
+        @Override public void keyTyped(KeyEvent e) {
+            char ch = e.getKeyChar();
+            if (ch >= 32 && ch < 127) typed.add(ch); // per il campo IP
         }
     };
 
@@ -63,6 +69,9 @@ final class Input {
 
     /** Prossimo tasto premuto (one-shot), o null. */
     Integer nextPress() { return presses.poll(); }
+
+    /** Prossimo carattere digitato (per i campi di testo), o null. */
+    Character nextTyped() { return typed.poll(); }
 
     /** Consuma il click del mouse: restituisce il punto esatto della pressione, o null. */
     Point consumeClick() { return click.getAndSet(null); }

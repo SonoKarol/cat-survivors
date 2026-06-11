@@ -29,8 +29,8 @@ final class Enemy {
         this.wob = Util.rand(0, Util.TAU);
     }
 
-    void update(double dt, Player p) {
-        double dx = p.x - x, dy = p.y - y;
+    void update(double dt, double targetX, double targetY) {
+        double dx = targetX - x, dy = targetY - y;
         double len = Math.hypot(dx, dy);
         if (len < 1) len = 1;
         x += dx / len * speed * dt + kbx * dt;

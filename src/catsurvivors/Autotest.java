@@ -17,6 +17,7 @@ final class Autotest {
     static void run() throws Exception {
         Input input = new Input();
         Game game = new Game(input);
+        App.init(game, input);
         game.startRun(Cats.ALL.get(0));
 
         int w = 1280, h = 720;
@@ -32,6 +33,10 @@ final class Autotest {
                 case 2 -> KeyEvent.VK_A;
                 default -> KeyEvent.VK_W;
             });
+            // mira rotante col mouse virtuale, come farebbe un giocatore vero
+            double aimAng = i * 0.04;
+            input.mouseX = (int) (640 + Math.cos(aimAng) * 240);
+            input.mouseY = (int) (360 + Math.sin(aimAng) * 240);
             game.step(dt, w, h);
             if (game.state == Game.State.LEVELUP && game.choices != null) {
                 game.pickChoice(game.choices.get(0));
@@ -60,14 +65,15 @@ final class Autotest {
         ImageIO.write(menuShot, "png", new File("autotest-menu.png"));
         game.state = Game.State.PLAYING;
 
+        Player p = game.localPlayer();
         System.out.println("[autotest] stato=" + game.state
                 + " tempo=" + String.format("%.1f", game.time) + "s"
                 + " nemici=" + game.enemies.size()
                 + " ko=" + game.kills
-                + " livello=" + game.player.level
-                + " ps=" + (int) game.player.hp
-                + " armi=" + game.player.weapons.size()
-                + " passivi=" + game.player.passives.size());
+                + " livello=" + p.level
+                + " ps=" + (int) p.hp
+                + " armi=" + p.weapons.size()
+                + " passivi=" + p.passives.size());
         System.out.println("[autotest] screenshot: " + out.getAbsolutePath());
         if (game.kills == 0) {
             System.out.println("[autotest] ERRORE: nessun nemico sconfitto in 30s, qualcosa non va.");

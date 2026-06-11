@@ -2,10 +2,12 @@
 
 Un clone di **Vampire Survivors** scritto in **Java puro (Java2D/AWT)**, dove i protagonisti
 sono gatti di razze e caratteri diversi. Il giardino di casa è stato invaso da cetrioli,
-piccioni, aspirapolvere e altri incubi felini: scegli il tuo gatto e **sopravvivi 10 minuti**.
+piccioni, aspirapolvere e altri incubi felini: scegli il tuo gatto e **sopravvivi 10 minuti**
+— da solo o in **co-op online fino a 4 giocatori**.
 
-Zero dipendenze esterne, zero asset: tutta la grafica è disegnata proceduralmente con Java2D
-e tutti gli effetti sonori sono sintetizzati a runtime. Serve solo un JDK.
+Zero dipendenze esterne, zero asset: tutta la grafica è disegnata proceduralmente con Java2D,
+tutti gli effetti sonori sono sintetizzati a runtime e il networking è TCP puro della libreria
+standard. Serve solo un JDK.
 
 ![Selezione del gatto](docs/screenshot-menu.png)
 ![In gioco](docs/screenshot-game.png)
@@ -34,11 +36,32 @@ Con `build.bat` si crea anche il jar eseguibile `dist\CatSurvivors.jar`
 
 | Tasto | Azione |
 |---|---|
-| **WASD / Frecce** | Movimento (le armi attaccano da sole) |
-| **Mouse / 1-4** | Scelta dei potenziamenti al level up |
+| **WASD / Frecce** | Movimento |
+| **Mouse** | Mira: i colpi partono verso il cursore (le armi sparano da sole) |
+| **Click / 1-4** | Scelta dei potenziamenti al level up |
 | **P / Esc** | Pausa |
 | **M** | Audio on/off |
 | **R** | Torna al menu (a fine partita) |
+
+## Co-op con gli amici (fino a 4 gatti)
+
+Il multiplayer è **host autoritativo su TCP**: l'host simula il mondo, gli ospiti
+inviano input e ricevono lo stato a 20 Hz (interpolato lato client).
+
+1. **L'host** sceglie un gatto e clicca **OSPITA CO-OP**: si apre la lobby con l'IP da
+   condividere (porta `7777`).
+2. **Gli amici** scelgono il proprio gatto, cliccano **UNISCITI A UN AMICO** e inserisco
+   l'indirizzo dell'host (es. `192.168.1.10` o `ip:porta`).
+3. Quando tutti sono in lobby, l'host preme **INVIO** e si parte.
+
+Note di sopravvivenza di squadra:
+
+- Sulla **stessa rete (LAN)** funziona subito; **da internet** serve il port forwarding
+  della porta 7777 sul router dell'host, oppure una VPN tipo Tailscale/Hamachi/Radmin.
+- Nemici e boss scalano con il numero di gatti (+60% spawn e +25% vita a gatto extra).
+- Ogni level up mette il mondo in pausa mentre il gatto interessato sceglie la carta.
+- Chi finisce KO diventa un **fantasma** e osserva; si perde solo se cadono tutti.
+- L'esperienza va a chi raccoglie la gemma: niente litigi, ce n'è per tutti.
 
 ## I gatti giocabili
 
@@ -75,28 +98,38 @@ compaiono i boss: il **Roomba 9000**, il **Phon Turbo** e infine il temutissimo
 ```
 src/catsurvivors/
 ├── Main.java        Entry point, finestra e game loop (~60 FPS, BufferStrategy)
-├── Game.java        Stato di gioco, simulazione, collisioni, level up, rendering del mondo
-├── Player.java      Il gatto: statistiche, armi, esperienza
-├── Enemy.java       Inseguimento, contraccolpi
+├── Game.java        Simulazione: collisioni, ondate, level up, rendering del mondo (host)
+├── Player.java      Il gatto: statistiche, armi, esperienza, mira col mouse
+├── Enemy.java       Inseguimento del gatto vivo più vicino, contraccolpi
 ├── Weapons.java     Le 8 armi (statistiche per livello + comportamento)
 ├── Passives.java    I 10 oggetti passivi
 ├── Enemies.java     Bestiario, ondate, calendario boss
 ├── Cats.java        Il roster degli 8 gatti
 ├── Sprites.java     Tutta la grafica, disegnata proceduralmente con Java2D
 ├── Sfx.java         Effetti sonori chiptune sintetizzati a runtime
-├── Ui.java          Menu, HUD, level up, pausa, schermate finali
+├── Ui.java          Menu, HUD, lobby, level up, pausa, schermate finali
 ├── Input.java       Tastiera e mouse (thread-safe EDT → game loop)
-└── Autotest.java    Smoke test headless: `java -cp out catsurvivors.Main --autotest`
+├── App.java         Collante tra menu, partita locale/host e modalità client
+├── Net.java         Protocollo binario del co-op (snapshot, scelte, input)
+├── Server.java      Lato host: accept, connessioni, pump sul thread di gioco
+├── Client.java      Lato ospite: invio input, ricezione snapshot
+├── ClientView.java  Rendering del client con interpolazione tra snapshot
+├── Snapshot.java    Fotografia del mondo spedita ai client
+├── Autotest.java    Smoke test headless della partita in solitaria
+└── Cooptest.java    Smoke test headless del co-op (host+client via TCP locale)
 ```
 
 ## Test
 
 ```bat
 java -cp out catsurvivors.Main --autotest
+java -cp out catsurvivors.Main --cooptest
 ```
 
-Simula 30 secondi di partita senza finestra (movimento sintetico, level up automatici),
-verifica che i nemici muoiano e salva due screenshot (`autotest.png`, `autotest-menu.png`).
+Il primo simula 30 secondi di partita senza finestra (movimento e mira sintetici, level up
+automatici), verifica che i nemici muoiano e salva due screenshot. Il secondo avvia un host
+con lobby, ci connette un client via TCP su localhost, simula 20 secondi e verifica
+registrazione, movimento remoto, uccisioni e il giro completo del level up via rete.
 
 ## Pubblicare su un remote Git
 

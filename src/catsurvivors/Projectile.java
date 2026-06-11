@@ -9,6 +9,7 @@ import java.util.Set;
  */
 final class Projectile {
     final String type;
+    Player owner; // chi l'ha sparato (in co-op: orbite, rimbalzi e contraccolpi sono relativi a lui)
     double x, y, vx, vy, r, life, maxLife, delay, damage, ang, grow, radius, rotSpeed, grav, rot, vr, ty, area;
     int pierce;
     boolean dead;
