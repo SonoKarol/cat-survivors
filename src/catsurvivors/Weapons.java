@@ -27,6 +27,7 @@ final class Weapons {
                     int side = (i % 2 == 0) ? 1 : -1;
                     double dx = p.faceX * side, dy = p.faceY * side;
                     Projectile pr = new Projectile("slash");
+                    pr.owner = p;
                     pr.x = p.x + dx * 48;
                     pr.y = p.y + dy * 48 - 6;
                     pr.ang = Math.atan2(dy, dx);
@@ -54,6 +55,7 @@ final class Weapons {
                 for (int i = 0; i < st.amount; i++) {
                     double a = Util.rand(0, Util.TAU);
                     Projectile pr = new Projectile("ball");
+                    pr.owner = p;
                     pr.x = p.x;
                     pr.y = p.y;
                     pr.vx = Math.cos(a) * st.speed;
@@ -81,6 +83,7 @@ final class Weapons {
             void fire(Game g, Player p, WStats st) {
                 for (int i = 0; i < st.amount; i++) {
                     Projectile pr = new Projectile("lob");
+                    pr.owner = p;
                     pr.x = p.x;
                     pr.y = p.y - 10;
                     pr.vx = Util.rand(-90, 90) + p.faceX * 60;
@@ -113,7 +116,7 @@ final class Weapons {
                     if (e.dead) continue;
                     double rr = r + e.r;
                     if (Util.dist2(p.x, p.y, e.x, e.y) <= rr * rr) {
-                        g.damageEnemy(e, st.damage, 40, p.x, p.y);
+                        g.damageEnemy(e, st.damage, 40, p.x, p.y, p);
                     }
                 }
                 p.auraR = r;
@@ -137,6 +140,7 @@ final class Weapons {
                             ? Util.angleTo(p.x, p.y, targets.get(i).x, targets.get(i).y)
                             : Util.rand(0, Util.TAU);
                     Projectile pr = new Projectile("wave");
+                    pr.owner = p;
                     pr.x = p.x;
                     pr.y = p.y;
                     pr.vx = Math.cos(ang) * st.speed;
@@ -168,6 +172,7 @@ final class Weapons {
             void fire(Game g, Player p, WStats st) {
                 for (int i = 0; i < st.amount; i++) {
                     Projectile pr = new Projectile("orbit");
+                    pr.owner = p;
                     pr.ang = Util.TAU / st.amount * i;
                     pr.radius = 80 * st.area;
                     pr.rotSpeed = st.speed;
@@ -197,6 +202,7 @@ final class Weapons {
                     double off = i - (st.amount - 1) / 2.0;
                     double ang = base + off * 0.08;
                     Projectile pr = new Projectile("knife");
+                    pr.owner = p;
                     pr.x = p.x - Math.sin(base) * off * 10;
                     pr.y = p.y + Math.cos(base) * off * 10;
                     pr.vx = Math.cos(ang) * st.speed;
@@ -234,6 +240,7 @@ final class Weapons {
                         ty = p.y + Util.rand(-200, 200);
                     }
                     Projectile pr = new Projectile("fall");
+                    pr.owner = p;
                     pr.x = tx;
                     pr.y = ty - 320;
                     pr.ty = ty;

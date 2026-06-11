@@ -1,7 +1,9 @@
 package catsurvivors;
 
+import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.event.KeyEvent;
@@ -10,28 +12,36 @@ import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.QuadCurve2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-/** Stato di gioco, simulazione e rendering del mondo. */
+/** Stato di gioco, simulazione e rendering del mondo. In co-op gira solo sull'host. */
 final class Game {
-    enum State { MENU, PLAYING, LEVELUP, PAUSED, OVER, WIN }
+    enum State { MENU, LOBBY, PLAYING, LEVELUP, PAUSED, OVER, WIN }
 
     private static final Color GRASS_A = new Color(0x7aa65a);
     private static final Color GRASS_B = new Color(0x74a055);
     private static final Color GRASS_DARK = new Color(0x5d8a45);
     private static final Color DIRT = new Color(155, 139, 94, 90);
     private static final Font F_FLOAT = new Font(Font.SANS_SERIF, Font.BOLD, 12);
+    private static final Font F_NAME = new Font(Font.SANS_SERIF, Font.BOLD, 11);
+    // i rimbalzi del gomitolo usano un'area fissa intorno al proprietario,
+    // così host e client vedono la stessa fisica a prescindere dalla finestra
+    private static final double VIRT_HALF_W = 640, VIRT_HALF_H = 360;
 
     final Input input;
     volatile State state = State.MENU;
     double time = 0;
     int kills = 0;
-    Player player;
+    final List<Player> players = new ArrayList<>();
+    Server server; // non null quando si ospita una partita co-op
+    Player leveling; // chi sta scegliendo il potenziamento
+    private int nextPid = 1;
+    long frame = 0;
     final List<Enemy> enemies = new ArrayList<>();
     final List<Projectile> projectiles = new ArrayList<>();
     final List<Gem> gems = new ArrayList<>();
@@ -45,10 +55,13 @@ final class Game {
 
     Game(Input input) { this.input = input; }
 
-    void reset() {
+    Player localPlayer() { return players.isEmpty() ? null : players.get(0); }
+
+    boolean isCoop() { return server != null; }
+
+    private void resetWorld() {
         time = 0;
         kills = 0;
-        player = null;
         enemies.clear();
         projectiles.clear();
         gems.clear();
@@ -61,28 +74,103 @@ final class Game {
         bossIdx = 0;
         ringIdx = 0;
         choices = null;
+        leveling = null;
+        frame = 0;
     }
 
+    void reset() {
+        resetWorld();
+        players.clear();
+        nextPid = 1;
+    }
+
+    /** Partita in solitaria. */
     void startRun(CatDef cat) {
         reset();
-        player = new Player(cat, this);
+        Player p = new Player(cat, this);
+        p.pid = 0;
+        players.add(p);
         state = State.PLAYING;
         Sfx.play("meow");
     }
 
-    /** Un passo di simulazione: input globale + update se si sta giocando. */
+    /** Apre la lobby co-op: l'host è il giocatore 0, gli amici si collegano via TCP. */
+    void startHosting(CatDef cat, int port) throws IOException {
+        reset();
+        Player p = new Player(cat, this);
+        p.pid = 0;
+        players.add(p);
+        server = new Server(this, port);
+        state = State.LOBBY;
+        Sfx.play("meow");
+    }
+
+    /** Avvia la partita dalla lobby con tutti i giocatori collegati. */
+    void startRunMulti() {
+        resetWorld();
+        for (int i = 0; i < players.size(); i++) {
+            Player p = players.get(i);
+            double a = Util.TAU * i / players.size();
+            p.x = Math.cos(a) * 40;
+            p.y = Math.sin(a) * 40;
+        }
+        state = State.PLAYING;
+        Sfx.play("meow");
+    }
+
+    /** Registra un amico appena connesso (chiamato dal Server sul thread di gioco). */
+    Player addRemotePlayer(CatDef cat) {
+        Player p = new Player(cat, this);
+        p.pid = nextPid++;
+        double a = Util.rand(0, Util.TAU);
+        p.x = Math.cos(a) * 50;
+        p.y = Math.sin(a) * 50;
+        players.add(p);
+        Sfx.play("meow");
+        return p;
+    }
+
+    void removePlayer(Player p) {
+        if (!players.remove(p)) return;
+        projectiles.removeIf(pr -> pr.owner == p);
+        if (state != State.LOBBY) addFloat(p.x, p.y - 30, p.cat.name + " se n'è andato", new Color(0xffd166));
+        if (leveling == p) { // non bloccare la partita su una scelta orfana
+            leveling = null;
+            choices = null;
+            if (state == State.LEVELUP) state = State.PLAYING;
+            Player nxt = nextLeveler();
+            if (nxt != null) openLevelUp(nxt);
+        }
+    }
+
+    void toMenu() {
+        if (server != null) {
+            server.close();
+            server = null;
+        }
+        reset();
+        state = State.MENU;
+    }
+
+    /** Un passo: input, messaggi di rete, simulazione, broadcast. */
     void step(double dt, int w, int h) {
         viewW = w;
         viewH = h;
-        // auto-pausa se la finestra ha perso il focus durante una partita
+        frame++;
         if (input.focusLost) {
             input.focusLost = false;
-            if (state == State.PLAYING) state = State.PAUSED;
+            // in solitaria mettiti in pausa; in co-op non bloccare gli amici
+            if (state == State.PLAYING && !isCoop()) state = State.PAUSED;
         }
         Integer k;
-        while ((k = input.nextPress()) != null) handleKey(k);
+        while ((k = input.nextPress()) != null) {
+            if (App.ipActive()) App.ipKey(k);
+            else handleKey(k);
+        }
         Ui.handleInput(this);
+        if (server != null) server.pump();
         if (state == State.PLAYING) update(dt);
+        if (server != null && frame % 3 == 0) server.broadcast();
     }
 
     private void handleKey(int code) {
@@ -90,13 +178,17 @@ final class Game {
             case KeyEvent.VK_P, KeyEvent.VK_ESCAPE -> {
                 if (state == State.PLAYING) state = State.PAUSED;
                 else if (state == State.PAUSED) state = State.PLAYING;
+                else if (state == State.LOBBY && code == KeyEvent.VK_ESCAPE) toMenu();
             }
             case KeyEvent.VK_M -> Sfx.toggle();
             case KeyEvent.VK_R -> {
-                if (state == State.OVER || state == State.WIN) state = State.MENU;
+                if (state == State.OVER || state == State.WIN) toMenu();
+            }
+            case KeyEvent.VK_ENTER -> {
+                if (state == State.LOBBY) startRunMulti();
             }
             default -> {
-                if (state == State.LEVELUP && choices != null) {
+                if (state == State.LEVELUP && choices != null && leveling == localPlayer()) {
                     int idx = switch (code) {
                         case KeyEvent.VK_1 -> 0;
                         case KeyEvent.VK_2 -> 1;
@@ -110,16 +202,36 @@ final class Game {
         }
     }
 
+    /** Movimento WASD + mira verso il cursore per il giocatore locale. */
+    private void applyLocalInput() {
+        Player p = localPlayer();
+        if (p == null) return;
+        double[] a = input.axis();
+        p.inMoveX = a[0];
+        p.inMoveY = a[1];
+        if (input.mouseX >= 0) {
+            // la camera è centrata sul gatto: il vettore centro->cursore è la mira
+            double ax = input.mouseX - viewW / 2.0, ay = input.mouseY - viewH / 2.0;
+            if (Math.hypot(ax, ay) > 12) {
+                p.inAimX = ax;
+                p.inAimY = ay;
+            }
+        }
+    }
+
     private void update(double dt) {
         time += dt;
         if (time >= Enemies.DURATION) {
             win();
             return;
         }
-        Player p = player;
-        p.update(dt);
+        applyLocalInput();
+        for (Player p : players) p.update(dt);
         updateSpawns(dt);
-        for (Enemy e : enemies) e.update(dt, p);
+        for (Enemy e : enemies) {
+            Player t = nearestAlivePlayer(e.x, e.y);
+            if (t != null) e.update(dt, t.x, t.y);
+        }
         separate();
         updateProjectiles(dt);
         updateGems(dt);
@@ -128,65 +240,108 @@ final class Game {
         // danno da contatto
         for (Enemy e : enemies) {
             if (e.dead) continue;
-            double rr = e.r + p.r - 4;
-            if (Util.dist2(e.x, e.y, p.x, p.y) < rr * rr) p.takeDamage(e.damage);
+            for (Player p : players) {
+                if (!p.alive) continue;
+                double rr = e.r + p.r - 4;
+                if (Util.dist2(e.x, e.y, p.x, p.y) < rr * rr) p.takeDamage(e.damage);
+            }
         }
         // i nemici rimasti troppo indietro vengono riposizionati sul bordo (stile survivor)
         double far = Math.max(viewW, viewH) * 0.9 + 120;
         for (Enemy e : enemies) {
-            if (!e.boss && Util.dist2(e.x, e.y, p.x, p.y) > far * far) {
+            if (e.boss) continue;
+            Player near = nearestAlivePlayer(e.x, e.y);
+            if (near != null && Util.dist2(e.x, e.y, near.x, near.y) > far * far) {
                 double a = Util.rand(0, Util.TAU);
-                e.x = p.x + Math.cos(a) * spawnRadius();
-                e.y = p.y + Math.sin(a) * spawnRadius();
+                e.x = near.x + Math.cos(a) * spawnRadius();
+                e.y = near.y + Math.sin(a) * spawnRadius();
             }
         }
         enemies.removeIf(e -> e.dead);
         if (shake > 0) shake = Math.max(0, shake - 20 * dt);
-        if (state == State.PLAYING && p.pendingLevels > 0) openLevelUp();
+        if (state == State.PLAYING) {
+            Player lp = nextLeveler();
+            if (lp != null) openLevelUp(lp);
+        }
+    }
+
+    Player nearestAlivePlayer(double x, double y) {
+        Player best = null;
+        double bestD2 = Double.MAX_VALUE;
+        for (Player p : players) {
+            if (!p.alive) continue;
+            double d2 = Util.dist2(x, y, p.x, p.y);
+            if (d2 < bestD2) { bestD2 = d2; best = p; }
+        }
+        return best;
+    }
+
+    /** Un giocatore al tappeto diventa un fantasma; si perde solo se cadono tutti. */
+    void onPlayerDown(Player p) {
+        p.alive = false;
+        p.pendingLevels = 0;
+        addFloat(p.x, p.y - 30, p.cat.name + " è KO!", new Color(0xff6b6b));
+        addParticles(p.x, p.y, new Color(0xb9c4d8), 10);
+        for (Player q : players) if (q.alive) return;
+        gameOver();
     }
 
     private double spawnRadius() { return Math.max(viewW, viewH) / 2.0 + 80; }
 
+    /** I nemici nascono intorno a un giocatore vivo a caso: azione per tutti. */
+    private Player spawnAnchor() {
+        List<Player> alive = new ArrayList<>();
+        for (Player p : players) if (p.alive) alive.add(p);
+        return alive.isEmpty() ? localPlayer() : Util.choice(alive);
+    }
+
     private void updateSpawns(double dt) {
         Wave wave = Enemies.WAVES.get(0);
         for (Wave w : Enemies.WAVES) if (time >= w.t) wave = w;
-        spawnAcc += wave.rate * dt;
+        double mult = 1 + (players.size() - 1) * 0.6; // più gatti, più cetrioli
+        spawnAcc += wave.rate * mult * dt;
+        int max = (int) (wave.max * mult);
         while (spawnAcc >= 1) {
             spawnAcc -= 1;
-            if (enemies.size() < wave.max) spawnEnemy(Util.choice(wave.types), false);
+            if (enemies.size() < max) spawnEnemy(Util.choice(wave.types), false);
         }
-        // un élite al minuto: più grosso, più cattivo, lascia un regalo
         eliteTimer -= dt;
         if (eliteTimer <= 0) {
             eliteTimer = 60;
             spawnEnemy(Util.choice(wave.types), true);
         }
-        // boss programmati
         if (bossIdx < Enemies.BOSSES.size() && time >= Enemies.BOSSES.get(bossIdx).t) {
             BossSpawn bs = Enemies.BOSSES.get(bossIdx);
             bossIdx++;
             Enemy b = spawnEnemy(bs.type, false);
-            addFloat(player.x, player.y - 60, "ATTENZIONE: " + b.def.name + "!", new Color(0xff5b5b));
+            Player lp = localPlayer();
+            if (lp != null) addFloat(lp.x, lp.y - 60, "ATTENZIONE: " + b.def.name + "!", new Color(0xff5b5b));
             Sfx.play("boss");
             shake = 8;
         }
-        // accerchiamenti di cetrioli
         if (ringIdx < Enemies.RING_TIMES.length && time >= Enemies.RING_TIMES[ringIdx]) {
             ringIdx++;
-            int n = 26;
-            for (int i = 0; i < n; i++) {
-                double a = Util.TAU / n * i;
-                spawnEnemyAt("cetriolo", player.x + Math.cos(a) * 380, player.y + Math.sin(a) * 380, false);
+            Player anchor = spawnAnchor();
+            if (anchor != null) {
+                int n = 26;
+                for (int i = 0; i < n; i++) {
+                    double a = Util.TAU / n * i;
+                    spawnEnemyAt("cetriolo", anchor.x + Math.cos(a) * 380, anchor.y + Math.sin(a) * 380, false);
+                }
+                addFloat(anchor.x, anchor.y - 60, "Accerchiato dai cetrioli!", new Color(0x9ee86a));
             }
-            addFloat(player.x, player.y - 60, "Accerchiato dai cetrioli!", new Color(0x9ee86a));
         }
     }
 
-    private double hpScale() { return 1 + time / 60.0 * 0.16; }
+    private double hpScale() {
+        return (1 + time / 60.0 * 0.16) * (1 + (players.size() - 1) * 0.25);
+    }
 
     Enemy spawnEnemy(String type, boolean elite) {
+        Player anchor = spawnAnchor();
+        double ax = anchor != null ? anchor.x : 0, ay = anchor != null ? anchor.y : 0;
         double a = Util.rand(0, Util.TAU);
-        return spawnEnemyAt(type, player.x + Math.cos(a) * spawnRadius(), player.y + Math.sin(a) * spawnRadius(), elite);
+        return spawnEnemyAt(type, ax + Math.cos(a) * spawnRadius(), ay + Math.sin(a) * spawnRadius(), elite);
     }
 
     Enemy spawnEnemyAt(String type, double x, double y, boolean elite) {
@@ -224,13 +379,13 @@ final class Game {
     }
 
     private void updateProjectiles(double dt) {
-        Player p = player;
         for (int i = 0; i < projectiles.size(); i++) {
             Projectile pr = projectiles.get(i);
             if (pr.delay > 0) {
                 pr.delay -= dt;
                 continue;
             }
+            Player own = pr.owner != null ? pr.owner : localPlayer();
             switch (pr.type) {
                 case "slash" -> {
                     pr.life -= dt;
@@ -240,7 +395,7 @@ final class Game {
                         double rr = pr.r + e.r;
                         if (Util.dist2(pr.x, pr.y, e.x, e.y) < rr * rr) {
                             pr.hit.add(e.id);
-                            damageEnemy(e, pr.damage, 140, p.x, p.y);
+                            damageEnemy(e, pr.damage, 140, own.x, own.y, own);
                         }
                     }
                 }
@@ -249,8 +404,8 @@ final class Game {
                     if (pr.life <= 0) { pr.dead = true; break; }
                     pr.x += pr.vx * dt;
                     pr.y += pr.vy * dt;
-                    double left = p.x - viewW / 2.0 + pr.r, right = p.x + viewW / 2.0 - pr.r;
-                    double top = p.y - viewH / 2.0 + pr.r, bot = p.y + viewH / 2.0 - pr.r;
+                    double left = own.x - VIRT_HALF_W + pr.r, right = own.x + VIRT_HALF_W - pr.r;
+                    double top = own.y - VIRT_HALF_H + pr.r, bot = own.y + VIRT_HALF_H - pr.r;
                     if (pr.x < left) { pr.x = left; pr.vx = Math.abs(pr.vx); }
                     if (pr.x > right) { pr.x = right; pr.vx = -Math.abs(pr.vx); }
                     if (pr.y < top) { pr.y = top; pr.vy = Math.abs(pr.vy); }
@@ -263,13 +418,13 @@ final class Game {
                     pr.vy += pr.grav * dt;
                     pr.y += pr.vy * dt;
                     pr.rot += pr.vr * dt;
-                    if (pr.life <= 0 || pr.y > p.y + viewH / 2.0 + 80) { pr.dead = true; break; }
+                    if (pr.life <= 0 || pr.y > own.y + VIRT_HALF_H + 80) { pr.dead = true; break; }
                     for (Enemy e : enemies) {
                         if (e.dead || pr.hit.contains(e.id)) continue;
                         double rr = pr.r + e.r;
                         if (Util.dist2(pr.x, pr.y, e.x, e.y) < rr * rr) {
                             pr.hit.add(e.id);
-                            damageEnemy(e, pr.damage, 120, pr.x, pr.y - 20);
+                            damageEnemy(e, pr.damage, 120, pr.x, pr.y - 20, own);
                             if (--pr.pierce < 0) { pr.dead = true; break; }
                         }
                     }
@@ -285,7 +440,7 @@ final class Game {
                         double rr = pr.r + e.r;
                         if (Util.dist2(pr.x, pr.y, e.x, e.y) < rr * rr) {
                             pr.hit.add(e.id);
-                            damageEnemy(e, pr.damage, 60, pr.x, pr.y);
+                            damageEnemy(e, pr.damage, 60, pr.x, pr.y, own);
                         }
                     }
                 }
@@ -293,8 +448,8 @@ final class Game {
                     pr.life -= dt;
                     if (pr.life <= 0) { pr.dead = true; break; }
                     pr.ang += pr.rotSpeed * dt;
-                    pr.x = p.x + Math.cos(pr.ang) * pr.radius;
-                    pr.y = p.y + Math.sin(pr.ang) * pr.radius;
+                    pr.x = own.x + Math.cos(pr.ang) * pr.radius;
+                    pr.y = own.y + Math.sin(pr.ang) * pr.radius;
                     hitTick(pr, 0.5, 90);
                 }
                 case "knife" -> {
@@ -307,7 +462,7 @@ final class Game {
                         double rr = pr.r + e.r;
                         if (Util.dist2(pr.x, pr.y, e.x, e.y) < rr * rr) {
                             pr.hit.add(e.id);
-                            damageEnemy(e, pr.damage, 60, pr.x - pr.vx * 0.01, pr.y - pr.vy * 0.01);
+                            damageEnemy(e, pr.damage, 60, pr.x - pr.vx * 0.01, pr.y - pr.vy * 0.01, own);
                             if (--pr.pierce < 0) { pr.dead = true; break; }
                         }
                     }
@@ -317,6 +472,7 @@ final class Game {
                     if (pr.y >= pr.ty) {
                         pr.dead = true;
                         Projectile boom = new Projectile("boom");
+                        boom.owner = own;
                         boom.x = pr.x;
                         boom.y = pr.ty;
                         boom.r = pr.area;
@@ -326,7 +482,7 @@ final class Game {
                             if (e.dead) continue;
                             double rr = boom.r + e.r;
                             if (Util.dist2(boom.x, boom.y, e.x, e.y) < rr * rr) {
-                                damageEnemy(e, pr.damage, 160, boom.x, boom.y);
+                                damageEnemy(e, pr.damage, 160, boom.x, boom.y, own);
                             }
                         }
                         addParticles(boom.x, boom.y, new Color(0xf2b04a), 8);
@@ -352,11 +508,11 @@ final class Game {
             Double next = pr.hitCd.get(e.id);
             if (next != null && time < next) continue;
             pr.hitCd.put(e.id, time + interval);
-            damageEnemy(e, pr.damage, kb, pr.x, pr.y);
+            damageEnemy(e, pr.damage, kb, pr.x, pr.y, pr.owner);
         }
     }
 
-    void damageEnemy(Enemy e, double dmg, double kb, double fromX, double fromY) {
+    void damageEnemy(Enemy e, double dmg, double kb, double fromX, double fromY, Player src) {
         if (e.dead) return;
         e.hp -= dmg;
         e.flash = 0.12;
@@ -367,14 +523,14 @@ final class Game {
         }
         if (floats.size() < 70) addFloat(e.x, e.y - e.r - 6, String.valueOf((int) Math.max(1, dmg)), Color.WHITE);
         Sfx.play("hit");
-        if (e.hp <= 0) killEnemy(e);
+        if (e.hp <= 0) killEnemy(e, src);
     }
 
-    private void killEnemy(Enemy e) {
+    private void killEnemy(Enemy e, Player src) {
         if (e.dead) return;
         e.dead = true;
         kills++;
-        double luck = player.stats.luck;
+        double luck = src != null ? src.stats.luck : 1;
         // la fortuna raddoppia le gemme e aumenta i drop
         int gemValue = e.xp;
         if (Util.RNG.nextDouble() < Math.min(0.5, (luck - 1) * 0.5)) gemValue *= 2;
@@ -397,21 +553,22 @@ final class Game {
     }
 
     private void updateGems(double dt) {
-        Player p = player;
-        double mr = p.stats.magnet;
         for (Gem g : gems) {
-            double d2 = Util.dist2(g.x, g.y, p.x, p.y);
+            Player best = nearestAlivePlayer(g.x, g.y);
+            if (best == null) continue;
+            double d2 = Util.dist2(g.x, g.y, best.x, best.y);
+            double mr = best.stats.magnet;
             if (g.vacuum || d2 < mr * mr) {
                 g.sp = Math.min(640, g.sp + 900 * dt);
                 double d = Math.sqrt(d2);
                 if (d > 1) {
-                    g.x += (p.x - g.x) / d * g.sp * dt;
-                    g.y += (p.y - g.y) / d * g.sp * dt;
+                    g.x += (best.x - g.x) / d * g.sp * dt;
+                    g.y += (best.y - g.y) / d * g.sp * dt;
                 }
             }
             if (d2 < 20 * 20) {
                 g.dead = true;
-                p.gainXp(g.value);
+                best.gainXp(g.value);
                 Sfx.play("pickup");
             }
         }
@@ -432,9 +589,10 @@ final class Game {
     }
 
     private void updatePickups(double dt) {
-        Player p = player;
         for (Pickup pk : pickups) {
             pk.bob += dt * 4;
+            Player p = nearestAlivePlayer(pk.x, pk.y);
+            if (p == null) continue;
             if (Util.dist2(pk.x, pk.y, p.x, p.y) < 26 * 26) {
                 pk.dead = true;
                 if (pk.kind.equals("croccantino")) {
@@ -491,14 +649,22 @@ final class Game {
 
     // ===== Level up =====
 
-    private void openLevelUp() {
-        state = State.LEVELUP;
-        Sfx.play("levelup");
-        choices = rollChoices();
+    private Player nextLeveler() {
+        for (Player p : players) {
+            if (p.alive && p.pendingLevels > 0) return p;
+        }
+        return null;
     }
 
-    private List<Choice> rollChoices() {
-        Player p = player;
+    private void openLevelUp(Player p) {
+        state = State.LEVELUP;
+        leveling = p;
+        choices = rollChoices(p);
+        if (p.pid != 0 && server != null) server.sendLevelUp(p, choices);
+        Sfx.play("levelup");
+    }
+
+    private List<Choice> rollChoices(Player p) {
         List<Choice> pool = new ArrayList<>();
         for (Player.WeaponInst w : p.weapons) {
             if (w.level < w.def.maxLevel) {
@@ -533,7 +699,8 @@ final class Game {
     }
 
     void pickChoice(Choice c) {
-        Player p = player;
+        Player p = leveling != null ? leveling : localPlayer();
+        if (p == null) return;
         switch (c.kind) {
             case "weapon" -> {
                 Player.WeaponInst w = p.getWeapon(c.id);
@@ -547,10 +714,14 @@ final class Game {
         Sfx.play("pickup");
         p.pendingLevels--;
         if (p.pendingLevels > 0) {
-            choices = rollChoices();
+            choices = rollChoices(p);
+            if (p.pid != 0 && server != null) server.sendLevelUp(p, choices);
         } else {
+            leveling = null;
             choices = null;
-            state = State.PLAYING;
+            Player nxt = nextLeveler();
+            if (nxt != null) openLevelUp(nxt);
+            else state = State.PLAYING;
         }
     }
 
@@ -568,7 +739,7 @@ final class Game {
 
     void render(Graphics2D g, int w, int h) {
         g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-        Player p = player;
+        Player p = localPlayer();
         double camX = p != null ? p.x - w / 2.0 : -w / 2.0;
         double camY = p != null ? p.y - h / 2.0 : -h / 2.0;
         double sx = 0, sy = 0;
@@ -579,11 +750,11 @@ final class Game {
         AffineTransform old = g.getTransform();
         g.translate(-camX + sx, -camY + sy);
         drawBackground(g, camX, camY, w, h);
-        if (p != null && state != State.MENU) drawWorld(g, p);
+        if (p != null && state != State.MENU) drawWorld(g);
         g.setTransform(old);
     }
 
-    private void drawBackground(Graphics2D g, double camX, double camY, int w, int h) {
+    static void drawBackground(Graphics2D g, double camX, double camY, int w, int h) {
         int ts = 64;
         int x0 = (int) Math.floor(camX / ts), x1 = (int) Math.floor((camX + w) / ts);
         int y0 = (int) Math.floor(camY / ts), y1 = (int) Math.floor((camY + h) / ts);
@@ -616,15 +787,17 @@ final class Game {
         }
     }
 
-    private void drawWorld(Graphics2D g, Player p) {
-        // aura di fusa
-        if (p.auraR > 0 && p.getWeapon("fusa") != null) {
-            float alpha = (float) (0.10 + 0.08 * p.auraPulse);
-            g.setColor(new Color(1f, 0.75f, 0.85f, alpha));
-            g.fill(new Ellipse2D.Double(p.x - p.auraR, p.y - p.auraR, p.auraR * 2, p.auraR * 2));
-            g.setColor(new Color(1f, 0.75f, 0.85f, 0.30f));
-            g.setStroke(new BasicStroke(1.6f));
-            g.draw(new Ellipse2D.Double(p.x - p.auraR, p.y - p.auraR, p.auraR * 2, p.auraR * 2));
+    private void drawWorld(Graphics2D g) {
+        // aure di fusa
+        for (Player p : players) {
+            if (p.alive && p.auraR > 0 && p.getWeapon("fusa") != null) {
+                float alpha = (float) (0.10 + 0.08 * p.auraPulse);
+                g.setColor(new Color(1f, 0.75f, 0.85f, alpha));
+                g.fill(new Ellipse2D.Double(p.x - p.auraR, p.y - p.auraR, p.auraR * 2, p.auraR * 2));
+                g.setColor(new Color(1f, 0.75f, 0.85f, 0.30f));
+                g.setStroke(new BasicStroke(1.6f));
+                g.draw(new Ellipse2D.Double(p.x - p.auraR, p.y - p.auraR, p.auraR * 2, p.auraR * 2));
+            }
         }
         // gemme
         for (Gem gm : gems) blit(g, Sprites.gem(gm.value), gm.x, gm.y, false, 1, 0);
@@ -649,12 +822,13 @@ final class Game {
             }
         }
         // nemici
+        Player lp = localPlayer();
         for (Enemy e : enemies) {
             if (e.dead) continue;
             shadow(g, e.x, e.y + e.r * 0.85, e.r * 0.9);
             BufferedImage img = Sprites.enemy(e.type);
             double scale = e.elite ? 1.5 : 1.0;
-            boolean flip = p.x < e.x;
+            boolean flip = lp != null && lp.x < e.x;
             if (e.elite) {
                 g.setColor(new Color(255, 209, 102, 120));
                 g.setStroke(new BasicStroke(2.5f));
@@ -674,19 +848,31 @@ final class Game {
                 g.fillRect((int) (e.x - bw / 2), (int) (e.y - e.r - 16), (int) (bw * ratio), 6);
             }
         }
-        // giocatore
-        shadow(g, p.x, p.y + 14, 13);
-        boolean blink = p.iframe > 0 && ((int) (p.iframe * 18)) % 2 == 0;
-        if (!blink) {
-            double bob = p.moving ? Math.sin(p.walkT) * 2 : 0;
-            blit(g, Sprites.cat(p.cat), p.x, p.y - 6 + bob, p.faceX < 0, 1.15, 0);
+        // gatti
+        for (Player p : players) {
+            Composite oldComp = g.getComposite();
+            if (!p.alive) g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f));
+            else shadow(g, p.x, p.y + 14, 13);
+            boolean blink = p.alive && p.iframe > 0 && ((int) (p.iframe * 18)) % 2 == 0;
+            if (!blink) {
+                double bob = p.moving ? Math.sin(p.walkT) * 2 : 0;
+                blit(g, Sprites.cat(p.cat), p.x, p.y - 6 + bob, p.faceX < 0, 1.15, 0);
+            }
+            g.setComposite(oldComp);
+            if (p.alive) {
+                double ratio = Util.clamp(p.hp / p.stats.maxHp, 0, 1);
+                g.setColor(new Color(0, 0, 0, 150));
+                g.fillRect((int) p.x - 16, (int) p.y + 18, 32, 5);
+                g.setColor(ratio > 0.4 ? new Color(0x7de87d) : new Color(0xe85d5d));
+                g.fillRect((int) p.x - 16, (int) p.y + 18, (int) (32 * ratio), 5);
+            }
+            if (p != lp) { // il nome degli amici sopra la testa
+                g.setFont(F_NAME);
+                g.setColor(new Color(255, 255, 255, 220));
+                java.awt.FontMetrics fm = g.getFontMetrics();
+                g.drawString(p.cat.name, (float) (p.x - fm.stringWidth(p.cat.name) / 2.0), (float) (p.y - 34));
+            }
         }
-        // barra vita sotto il gatto
-        double ratio = Util.clamp(p.hp / p.stats.maxHp, 0, 1);
-        g.setColor(new Color(0, 0, 0, 150));
-        g.fillRect((int) p.x - 16, (int) p.y + 18, 32, 5);
-        g.setColor(ratio > 0.4 ? new Color(0x7de87d) : new Color(0xe85d5d));
-        g.fillRect((int) p.x - 16, (int) p.y + 18, (int) (32 * ratio), 5);
         // proiettili
         for (Projectile pr : projectiles) {
             if (pr.delay > 0) continue;
@@ -706,19 +892,7 @@ final class Game {
                 }
                 case "ball" -> blit(g, Sprites.proj("gomitolo"), pr.x, pr.y, false, pr.r / 9.0, time * 6);
                 case "lob" -> blit(g, Sprites.proj("pallapelo"), pr.x, pr.y, false, pr.r / 10.0, pr.rot);
-                case "wave" -> {
-                    float a = (float) Util.clamp(pr.life / pr.maxLife, 0, 1);
-                    g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                    double deg = -Math.toDegrees(pr.ang);
-                    g.setColor(new Color(0.56f, 0.83f, 0.96f, a * 0.9f));
-                    g.draw(new Arc2D.Double(pr.x - pr.r, pr.y - pr.r, pr.r * 2, pr.r * 2, deg - 40, 80, Arc2D.OPEN));
-                    g.setColor(new Color(0.56f, 0.83f, 0.96f, a * 0.55f));
-                    double r2 = pr.r * 0.72;
-                    g.draw(new Arc2D.Double(pr.x - r2, pr.y - r2, r2 * 2, r2 * 2, deg - 35, 70, Arc2D.OPEN));
-                    double r3 = pr.r * 0.45;
-                    g.setColor(new Color(0.56f, 0.83f, 0.96f, a * 0.3f));
-                    g.draw(new Arc2D.Double(pr.x - r3, pr.y - r3, r3 * 2, r3 * 2, deg - 30, 60, Arc2D.OPEN));
-                }
+                case "wave" -> drawWave(g, pr.x, pr.y, pr.r, pr.ang, (float) Util.clamp(pr.life / pr.maxLife, 0, 1));
                 case "orbit" -> blit(g, Sprites.proj("artiglio"), pr.x, pr.y, false, 1.1, pr.ang + Math.PI / 2);
                 case "knife" -> blit(g, Sprites.proj("sardina"), pr.x, pr.y, false, 1, pr.ang);
                 case "fall" -> blit(g, Sprites.proj("crocc"), pr.x, pr.y, false, 1.1, time * 9);
@@ -741,12 +915,26 @@ final class Game {
         }
     }
 
-    private void shadow(Graphics2D g, double x, double y, double r) {
+    /** Onda sonora del miagolio: condivisa con il rendering del client. */
+    static void drawWave(Graphics2D g, double x, double y, double r, double ang, float a) {
+        g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        double deg = -Math.toDegrees(ang);
+        g.setColor(new Color(0.56f, 0.83f, 0.96f, a * 0.9f));
+        g.draw(new Arc2D.Double(x - r, y - r, r * 2, r * 2, deg - 40, 80, Arc2D.OPEN));
+        g.setColor(new Color(0.56f, 0.83f, 0.96f, a * 0.55f));
+        double r2 = r * 0.72;
+        g.draw(new Arc2D.Double(x - r2, y - r2, r2 * 2, r2 * 2, deg - 35, 70, Arc2D.OPEN));
+        double r3 = r * 0.45;
+        g.setColor(new Color(0.56f, 0.83f, 0.96f, a * 0.3f));
+        g.draw(new Arc2D.Double(x - r3, y - r3, r3 * 2, r3 * 2, deg - 30, 60, Arc2D.OPEN));
+    }
+
+    static void shadow(Graphics2D g, double x, double y, double r) {
         g.setColor(new Color(0, 0, 0, 45));
         g.fill(new Ellipse2D.Double(x - r, y - r * 0.45, r * 2, r * 0.9));
     }
 
-    private void blit(Graphics2D g, BufferedImage img, double x, double y, boolean flip, double scale, double rot) {
+    static void blit(Graphics2D g, BufferedImage img, double x, double y, boolean flip, double scale, double rot) {
         AffineTransform t = g.getTransform();
         g.translate(x, y);
         if (rot != 0) g.rotate(rot);
