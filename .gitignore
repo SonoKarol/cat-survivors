@@ -1,0 +1,21 @@
+# Artefatti di build
+out/
+dist/
+*.class
+
+# Output dell'autotest
+autotest.png
+autotest-menu.png
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Sistema operativo
+Thumbs.db
+desktop.ini
+.DS_Store
