@@ -231,16 +231,33 @@ final class Ui {
     private static void drawLobby(Game game, Graphics2D g, int w, int h) {
         g.setColor(new Color(8, 14, 9, 170));
         g.fillRect(0, 0, w, h);
-        Rectangle box = new Rectangle(w / 2 - 270, h / 2 - 170, 540, 340);
+        Rectangle box = new Rectangle(w / 2 - 290, h / 2 - 200, 580, 400);
         panel(g, box, false);
-        center(g, "LOBBY CO-OP", F_H2, GOLD, w / 2, box.y + 44);
-        center(g, "Di' ai tuoi amici di premere \"Unisciti a un amico\" e inserire:", F_TEXT, TEXT, w / 2, box.y + 76);
-        center(g, Server.lanIp() + ":" + Net.DEFAULT_PORT, F_MONO, BLUE_LT, w / 2, box.y + 106);
-        center(g, "(da internet serve il port forwarding della porta " + Net.DEFAULT_PORT + " o una VPN tipo Tailscale)",
-                F_SMALL, HINT, w / 2, box.y + 128);
-        int y = box.y + 165;
+        center(g, "LOBBY CO-OP", F_H2, GOLD, w / 2, box.y + 42);
+
+        // indirizzo LAN (amici sulla stessa rete)
+        center(g, "Stessa rete (LAN):", F_SMALL, GREEN_LT, w / 2, box.y + 74);
+        center(g, Server.lanIp() + ":" + Net.DEFAULT_PORT, F_MONO, BLUE_LT, w / 2, box.y + 98);
+
+        // indirizzo internet + stato del port forwarding automatico
+        center(g, "Da internet:", F_SMALL, GREEN_LT, w / 2, box.y + 128);
+        String pub = App.coopPublic;
+        if (pub != null && !pub.isEmpty()) {
+            center(g, pub, F_MONO, BLUE_LT, w / 2, box.y + 152);
+        } else {
+            center(g, "...", F_MONO, HINT, w / 2, box.y + 152);
+        }
+        String up = App.coopUpnp;
+        if (up != null && !up.isEmpty()) {
+            boolean ok = up.startsWith("Internet:");
+            center(g, up, F_SMALL, ok ? GREEN_LT : GOLD, w / 2, box.y + 172);
+        }
+        center(g, "(se UPnP non basta: port forwarding TCP " + Net.DEFAULT_PORT
+                + " sul router, o VPN tipo Tailscale)", F_SMALL, HINT, w / 2, box.y + 190);
+
+        int y = box.y + 226;
         center(g, "Gatti pronti (" + game.players.size() + "/" + Net.MAX_PLAYERS + "):", F_BOLD, GREEN_LT, w / 2, y);
-        y += 16;
+        y += 18;
         int n = game.players.size();
         int x0 = w / 2 - n * 45 + 45 / 2;
         for (int i = 0; i < n; i++) {
@@ -248,7 +265,7 @@ final class Ui {
             g.drawImage(Sprites.catBig(p.cat), x0 + i * 90 - 24, y, 48, 48, null);
             center(g, p.cat.name + (p.pid == 0 ? " (tu)" : ""), F_SMALL, TEXT, x0 + i * 90, y + 62);
         }
-        center(g, "INVIO — si parte!     ESC — annulla", F_BOLD, GOLD, w / 2, box.y + 310);
+        center(g, "INVIO — si parte!     ESC — annulla", F_BOLD, GOLD, w / 2, box.y + 376);
     }
 
     private static void drawHud(Game game, Graphics2D g, int w, int h) {

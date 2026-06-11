@@ -16,6 +16,7 @@ final class Cooptest {
     private Cooptest() {}
 
     static void run() throws Exception {
+        Util.seed(20260611L); // partita riproducibile
         int port = 17777;
         Input hostInput = new Input();
         Game game = new Game(hostInput);
@@ -48,9 +49,16 @@ final class Cooptest {
                 case 2 -> KeyEvent.VK_A;
                 default -> KeyEvent.VK_W;
             });
-            double aimAng = i * 0.05;
-            hostInput.mouseX = (int) (640 + Math.cos(aimAng) * 220);
-            hostInput.mouseY = (int) (360 + Math.sin(aimAng) * 220);
+            // mira col mouse verso il nemico più vicino (la camera è centrata sull'host a 640,360)
+            Player host = game.localPlayer();
+            java.util.List<Enemy> near = game.nearestEnemies(host.x, host.y, 1);
+            if (!near.isEmpty()) {
+                hostInput.mouseX = (int) (640 + (near.get(0).x - host.x));
+                hostInput.mouseY = (int) (360 + (near.get(0).y - host.y));
+            } else {
+                hostInput.mouseX = 760;
+                hostInput.mouseY = 360;
+            }
             // client: si muove verso destra e mira in alto a destra
             client.sendInput(1, 0, 0.7, -0.7);
 

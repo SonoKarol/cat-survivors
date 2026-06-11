@@ -5,10 +5,13 @@ import java.util.Random;
 
 /** Utilità matematiche e helper condivisi. */
 final class Util {
-    static final Random RNG = new Random();
+    static Random RNG = new Random();
     static final double TAU = Math.PI * 2;
 
     private Util() {}
+
+    /** Fissa il seme dell'RNG: usato dai test per risultati riproducibili. */
+    static void seed(long s) { RNG = new Random(s); }
 
     static double rand(double a, double b) { return a + RNG.nextDouble() * (b - a); }
 
