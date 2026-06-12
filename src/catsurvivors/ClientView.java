@@ -330,6 +330,20 @@ final class ClientView {
             sx += 41;
         }
         if (s.hasBoss) Ui.drawBossBar(g, w, h, s.bossName, s.bossRatio);
+        // minimappa
+        java.util.List<double[]> cats = new java.util.ArrayList<>();
+        for (Snapshot.PlayerS pl : s.players) {
+            cats.add(new double[]{pl.x, pl.y,
+                    Cats.ALL.get(pl.catIdx).sprite.body.getRGB() & 0xffffff,
+                    pl.pid == me.pid ? 1 : 0, pl.alive ? 1 : 0});
+        }
+        java.util.List<double[]> foes = new java.util.ArrayList<>();
+        for (Snapshot.EnemyS e : s.enemies) {
+            foes.add(new double[]{e.x, e.y, e.boss ? 2 : (e.elite ? 1 : 0)});
+        }
+        java.util.List<double[]> picks = new java.util.ArrayList<>();
+        for (Snapshot.PickS pk : s.picks) picks.add(new double[]{pk.x, pk.y});
+        Ui.drawMinimap(g, w, h, me.x, me.y, cats, foes, picks);
     }
 
     private static void drawClientLobby(Graphics2D g, Snapshot s, int w, int h) {
