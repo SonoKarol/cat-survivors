@@ -6,6 +6,10 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.Shape;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
@@ -311,6 +315,115 @@ final class Ui {
         if (boss != null) {
             drawBossBar(g, w, h, boss.def.name, (float) Util.clamp(boss.hp / boss.maxHp, 0, 1));
         }
+        // minimappa
+        List<double[]> cats = new ArrayList<>();
+        for (Player q : game.players) {
+            cats.add(new double[]{q.x, q.y, q.cat.sprite.body.getRGB() & 0xffffff, q == p ? 1 : 0, q.alive ? 1 : 0});
+        }
+        List<double[]> foes = new ArrayList<>();
+        for (Enemy e : game.enemies) {
+            if (!e.dead) foes.add(new double[]{e.x, e.y, e.boss ? 2 : (e.elite ? 1 : 0)});
+        }
+        List<double[]> picks = new ArrayList<>();
+        for (Pickup pk : game.pickups) picks.add(new double[]{pk.x, pk.y});
+        drawMinimap(g, w, h, p.x, p.y, cats, foes, picks);
+    }
+
+    // ===== Minimappa =====
+
+    /**
+     * Radar in basso a destra. Punti: gatti {x, y, rgb, isMe, alive},
+     * nemici {x, y, kind} (0=normale, 1=elite, 2=boss), pickup {x, y}.
+     * Gli alleati fuori portata restano agganciati al bordo con una freccia:
+     * in co-op non ci si perde più.
+     */
+    static void drawMinimap(Graphics2D g, int w, int h, double cx, double cy,
+                            List<double[]> cats, List<double[]> foes, List<double[]> picks) {
+        int size = 150, margin = 14;
+        int mx = w - size - margin, my = h - size - margin;
+        double half = size / 2.0;
+        double scale = size / 1800.0; // la mappa copre ~1800 px di mondo
+
+        Shape oldClip = g.getClip();
+        g.setColor(new Color(10, 18, 10, 175));
+        g.fillRoundRect(mx, my, size, size, 12, 12);
+        g.setClip(new RoundRectangle2D.Double(mx, my, size, size, 12, 12));
+
+        // croce di riferimento leggera
+        g.setColor(new Color(255, 255, 255, 16));
+        g.drawLine(mx, (int) (my + half), mx + size, (int) (my + half));
+        g.drawLine((int) (mx + half), my, (int) (mx + half), my + size);
+
+        // nemici (i boss restano visibili al bordo anche se lontani)
+        for (double[] f : foes) {
+            double dx = (f[0] - cx) * scale, dy = (f[1] - cy) * scale;
+            int kind = (int) f[2];
+            double px, py;
+            if (kind == 2) {
+                px = mx + half + Util.clamp(dx, -(half - 8), half - 8);
+                py = my + half + Util.clamp(dy, -(half - 8), half - 8);
+            } else {
+                if (Math.abs(dx) > half + 4 || Math.abs(dy) > half + 4) continue;
+                px = mx + half + dx;
+                py = my + half + dy;
+            }
+            switch (kind) {
+                case 2 -> {
+                    g.setColor(new Color(0xff4040));
+                    g.fill(new Ellipse2D.Double(px - 3.5, py - 3.5, 7, 7));
+                    g.setColor(new Color(255, 64, 64, 110));
+                    g.setStroke(new BasicStroke(1.5f));
+                    g.draw(new Ellipse2D.Double(px - 6, py - 6, 12, 12));
+                }
+                case 1 -> {
+                    g.setColor(new Color(0xffd166));
+                    g.fill(new Ellipse2D.Double(px - 2.5, py - 2.5, 5, 5));
+                }
+                default -> {
+                    g.setColor(new Color(214, 69, 69, 200));
+                    g.fill(new Ellipse2D.Double(px - 1.5, py - 1.5, 3, 3));
+                }
+            }
+        }
+        // pickup (croccantini e calamite)
+        g.setColor(new Color(0x7de87d));
+        for (double[] pk : picks) {
+            double px = (pk[0] - cx) * scale + mx + half;
+            double py = (pk[1] - cy) * scale + my + half;
+            if (px < mx || px > mx + size || py < my || py > my + size) continue;
+            g.fill(new Ellipse2D.Double(px - 2, py - 2, 4, 4));
+        }
+
+        // gatti: sempre visibili, con freccia quando l'alleato è fuori portata
+        for (double[] c : cats) {
+            double dx = (c[0] - cx) * scale, dy = (c[1] - cy) * scale;
+            boolean isMe = c[3] > 0, alive = c[4] > 0;
+            boolean outside = Math.abs(dx) > half - 9 || Math.abs(dy) > half - 9;
+            double px = mx + half + Util.clamp(dx, -(half - 9), half - 9);
+            double py = my + half + Util.clamp(dy, -(half - 9), half - 9);
+            Color col = alive ? new Color((int) c[2] & 0xffffff) : new Color(120, 120, 120);
+            if (outside && !isMe) {
+                double ang = Math.atan2(dy, dx);
+                g.setColor(col);
+                Path2D tri = new Path2D.Double();
+                tri.moveTo(px + Math.cos(ang) * 8, py + Math.sin(ang) * 8);
+                tri.lineTo(px + Math.cos(ang + 2.4) * 5.5, py + Math.sin(ang + 2.4) * 5.5);
+                tri.lineTo(px + Math.cos(ang - 2.4) * 5.5, py + Math.sin(ang - 2.4) * 5.5);
+                tri.closePath();
+                g.fill(tri);
+            }
+            g.setColor(Color.WHITE);
+            double r = isMe ? 4.5 : 4;
+            g.fill(new Ellipse2D.Double(px - r, py - r, r * 2, r * 2));
+            g.setColor(col);
+            double r2 = isMe ? 3 : 2.5;
+            g.fill(new Ellipse2D.Double(px - r2, py - r2, r2 * 2, r2 * 2));
+        }
+
+        g.setClip(oldClip);
+        g.setColor(new Color(0x44613f));
+        g.setStroke(new BasicStroke(2f));
+        g.drawRoundRect(mx, my, size, size, 12, 12);
     }
 
     static void drawBossBar(Graphics2D g, int w, int h, String name, float ratio) {
