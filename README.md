@@ -14,7 +14,21 @@ standard. Serve solo un JDK.
 
 ## Requisiti
 
-- **JDK 17 o superiore** (`javac` e `java` nel PATH) — nessuna libreria esterna, nessun build tool.
+- **Per sviluppare/compilare**: JDK 17 o superiore (`javac` e `java` nel PATH) — nessuna libreria esterna, nessun build tool.
+- **Per giocare e basta**: nemmeno Java! Vedi la versione portatile qui sotto.
+
+## Versione portatile per gli amici (senza installare Java)
+
+```bat
+package.bat
+```
+
+Produce `dist\CatSurvivors-windows.zip` (~24 MB): un pacchetto Windows con dentro
+`CatSurvivors.exe` e un runtime Java ridotto creato con `jpackage`. Chi lo riceve
+**scompatta lo zip e fa doppio clic su `CatSurvivors.exe`** — niente da installare.
+
+Per amici su Mac/Linux invece serve Java ([adoptium.net](https://adoptium.net), Temurin 17+),
+poi si gioca col jar: `java -jar CatSurvivors.jar`.
 
 ## Come si gioca
 
