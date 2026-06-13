@@ -29,6 +29,8 @@ export class Input {
   mouseY = -1;
   focusLost = false;
 
+  // true sui dispositivi prevalentemente touch (telefoni/tablet): pointer grossolano
+  readonly isTouch = !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
   // touch: dito sinistro = joystick movimento, dito destro = aim
   isTouchActive = false;
   private leftId: number | null = null;
@@ -37,6 +39,7 @@ export class Input {
   private leftDX = 0;
   private leftDY = 0;
   private rightId: number | null = null;
+  private fullscreenTried = false;
 
   // raggio entro cui il joystick si considera "a riposo"
   private static readonly JOYSTICK_RADIUS = 70;
@@ -106,13 +109,40 @@ export class Input {
     return { x: t.clientX - rect.left, y: t.clientY - rect.top };
   }
 
+  // Su mobile il gioco rende bene solo a tutto schermo: itch lo incorpora in un
+  // riquadro fisso (es. 1280×720) che su un telefono viene ritagliato. Al primo
+  // tocco — gesto utente richiesto dal browser — proviamo a entrare in fullscreen.
+  // iOS Safari non supporta requestFullscreen su elementi non-video: in quel caso
+  // l'eccezione viene ignorata e restano attivi l'hint di rotazione e il "Mobile
+  // friendly" di itch.
+  private tryEnterFullscreen(): void {
+    if (this.fullscreenTried) return;
+    this.fullscreenTried = true;
+    if (!this.isTouch) return;
+    if (document.fullscreenElement) return;
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
+    try {
+      const r = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen?.();
+      if (r && typeof (r as Promise<void>).then === "function") (r as Promise<void>).catch(() => {});
+    } catch {
+      /* fullscreen non disponibile (es. iOS): si prosegue senza */
+    }
+  }
+
   private onTouchStart = (e: TouchEvent) => {
     e.preventDefault();
     this.isTouchActive = true;
+    this.tryEnterFullscreen();
     const w = this.canvas.clientWidth;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
       const p = this.touchToCanvas(t);
+      // ogni tocco vale come click nel punto premuto: così i menu (anche i pulsanti
+      // sulla metà sinistra) sono sempre toccabili. Durante il gioco i click non sono
+      // usati, quindi è innocuo. La mira (mouseX/Y) la muove solo il dito destro.
+      this.click = p;
       if (p.x < w / 2) {
         // metà sinistra → joystick movimento
         if (this.leftId === null) {
@@ -123,12 +153,11 @@ export class Input {
           this.leftDY = 0;
         }
       } else {
-        // metà destra → aim + simula click per i menu
+        // metà destra → aim
         if (this.rightId === null) {
           this.rightId = t.identifier;
           this.mouseX = p.x;
           this.mouseY = p.y;
-          this.click = p;
         }
       }
     }

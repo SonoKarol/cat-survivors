@@ -9,14 +9,17 @@
         margin: 0;
         padding: 0;
         width: 100%;
-        height: 100%;
+        height: 100vh;   /* fallback per browser vecchi */
+        height: 100dvh;  /* area realmente visibile su mobile (esclude la barra del browser) */
         overflow: hidden;
         background: #0a0d09;
       }
       #game {
         display: block;
         width: 100vw;
-        height: 100vh;
+        height: 100vh;   /* fallback per browser vecchi */
+        width: 100dvw;
+        height: 100dvh;  /* tiene conto della chrome del browser mobile: niente taglio in fondo */
         /* il canvas è pixel-perfect: niente smoothing del browser sull'upscale */
         image-rendering: auto;
         background: #131a12;
