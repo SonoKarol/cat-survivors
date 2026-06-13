@@ -5,7 +5,7 @@
 import { Input } from "./input.ts";
 import { Game } from "./game.ts";
 import { G } from "./g2d.ts";
-import { Ui } from "./ui.ts";
+import { Ui, drawTouchControls } from "./ui.ts";
 import { App } from "./app.ts";
 import { initSfx } from "./sfx.ts";
 import { clientFrame } from "./clientview.ts";
@@ -54,6 +54,9 @@ function frame(now: number): void {
   } else {
     game.render(g, logicalW, logicalH);
     Ui.draw(game, g, logicalW, logicalH);
+  }
+  if (input.isTouchActive) {
+    drawTouchControls(g, logicalW, logicalH, input.touchJoystick());
   }
 
   requestAnimationFrame(frame);

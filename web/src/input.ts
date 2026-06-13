@@ -29,6 +29,18 @@ export class Input {
   mouseY = -1;
   focusLost = false;
 
+  // touch: dito sinistro = joystick movimento, dito destro = aim
+  isTouchActive = false;
+  private leftId: number | null = null;
+  private leftOriginX = 0;
+  private leftOriginY = 0;
+  private leftDX = 0;
+  private leftDY = 0;
+  private rightId: number | null = null;
+
+  // raggio entro cui il joystick si considera "a riposo"
+  private static readonly JOYSTICK_RADIUS = 70;
+
   constructor(private readonly canvas: HTMLCanvasElement) {
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
@@ -37,6 +49,10 @@ export class Input {
     canvas.addEventListener("mousedown", this.onMouseDown);
     // su itch il gioco è in un iframe: il click iniziale dà il focus per la tastiera
     canvas.addEventListener("mousedown", () => canvas.focus());
+    canvas.addEventListener("touchstart", this.onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", this.onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", this.onTouchEnd, { passive: false });
+    canvas.addEventListener("touchcancel", this.onTouchEnd, { passive: false });
     canvas.tabIndex = 0;
   }
 
@@ -85,19 +101,105 @@ export class Input {
     this.click = p;
   };
 
+  private touchToCanvas(t: Touch): Point {
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+  }
+
+  private onTouchStart = (e: TouchEvent) => {
+    e.preventDefault();
+    this.isTouchActive = true;
+    const w = this.canvas.clientWidth;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      const p = this.touchToCanvas(t);
+      if (p.x < w / 2) {
+        // metà sinistra → joystick movimento
+        if (this.leftId === null) {
+          this.leftId = t.identifier;
+          this.leftOriginX = p.x;
+          this.leftOriginY = p.y;
+          this.leftDX = 0;
+          this.leftDY = 0;
+        }
+      } else {
+        // metà destra → aim + simula click per i menu
+        if (this.rightId === null) {
+          this.rightId = t.identifier;
+          this.mouseX = p.x;
+          this.mouseY = p.y;
+          this.click = p;
+        }
+      }
+    }
+  };
+
+  private onTouchMove = (e: TouchEvent) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      const p = this.touchToCanvas(t);
+      if (t.identifier === this.leftId) {
+        const dx = p.x - this.leftOriginX;
+        const dy = p.y - this.leftOriginY;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          const clamped = Math.min(len, Input.JOYSTICK_RADIUS);
+          this.leftDX = (dx / len) * (clamped / Input.JOYSTICK_RADIUS);
+          this.leftDY = (dy / len) * (clamped / Input.JOYSTICK_RADIUS);
+        } else {
+          this.leftDX = 0;
+          this.leftDY = 0;
+        }
+      } else if (t.identifier === this.rightId) {
+        this.mouseX = p.x;
+        this.mouseY = p.y;
+      }
+    }
+  };
+
+  private onTouchEnd = (e: TouchEvent) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t.identifier === this.leftId) {
+        this.leftId = null;
+        this.leftDX = 0;
+        this.leftDY = 0;
+      } else if (t.identifier === this.rightId) {
+        this.rightId = null;
+      }
+    }
+  };
+
+  /** Posizione attuale della manopola del joystick sinistro (per il rendering). */
+  touchJoystick(): { ox: number; oy: number; dx: number; dy: number; active: boolean } {
+    return {
+      ox: this.leftOriginX,
+      oy: this.leftOriginY,
+      dx: this.leftDX,
+      dy: this.leftDY,
+      active: this.leftId !== null,
+    };
+  }
+
   down(code: string): boolean {
     return this.keys.has(code);
   }
 
-  /** Direzione di movimento normalizzata da WASD/frecce. */
+  /** Direzione di movimento normalizzata da WASD/frecce o joystick touch. */
   axis(): [number, number] {
     let x = 0, y = 0;
     if (this.down(Key.A) || this.down(Key.LEFT)) x -= 1;
     if (this.down(Key.D) || this.down(Key.RIGHT)) x += 1;
     if (this.down(Key.W) || this.down(Key.UP)) y -= 1;
     if (this.down(Key.S) || this.down(Key.DOWN)) y += 1;
-    if (x !== 0 && y !== 0) { const k = Math.SQRT1_2; x *= k; y *= k; }
-    return [x, y];
+    if (x !== 0 || y !== 0) {
+      if (x !== 0 && y !== 0) { const k = Math.SQRT1_2; x *= k; y *= k; }
+      return [x, y];
+    }
+    // fallback touch joystick
+    return [this.leftDX, this.leftDY];
   }
 
   /** Prossimo tasto premuto (one-shot), o null. */
