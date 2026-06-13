@@ -12,6 +12,37 @@ standard. Serve solo un JDK.
 ![Selezione del gatto](docs/screenshot-menu.png)
 ![In gioco](docs/screenshot-game.png)
 
+## 🌐 Versione Browser (itch.io)
+
+Il gioco è **giocabile direttamente nel browser** senza download su [**itch.io**](https://sonokarol.itch.io) — niente installazione di Java, 
+zero configurazione. Supporta **co-op online fino a 4 giocatori** tramite relay WebSocket.
+
+### Giocare online
+
+Visita [**itch.io**](https://sonokarol.itch.io), apri il gioco nel browser e invita i tuoi amici tramite il codice stanza.
+
+### Testare in locale (sviluppatori)
+
+Per compilare e testare il port TypeScript in sviluppo:
+
+```bash
+cd web
+npm install
+npm run dev        # http://localhost:5173  (gioco)
+npm run relay      # in un'altra finestra — ws://localhost:8080 (relay co-op)
+```
+
+In una scheda clicca **CREA STANZA** (apparirà il codice), in un'altra clicca **ENTRA IN STANZA** e digita il codice.
+
+### Buildare per itch.io
+
+```bash
+cd web
+npm run pack
+```
+
+Produce `cat-survivors-itch.zip` pronto da caricare su itch.io. Per i dettagli tecnici, strategie di deploy e configurazioni del relay, vedi [`web/README.md`](web/README.md).
+
 ## Requisiti
 
 - **Per sviluppare/compilare**: JDK 17 o superiore (`javac` e `java` nel PATH) — nessuna libreria esterna, nessun build tool.
