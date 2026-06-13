@@ -2,7 +2,7 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
     <title>Cat Survivors — miagola e sopravvivi</title>
     <style>
       html, body {
@@ -21,6 +21,12 @@
         image-rendering: auto;
         background: #131a12;
         cursor: crosshair;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+      }
+      @media (pointer: coarse) {
+        #game { cursor: none; }
       }
     </style>
   </head>

@@ -560,3 +560,38 @@ export const Ui = {
     }
   },
 };
+
+const JOYSTICK_RADIUS = 70;
+const KNOB_RADIUS = 26;
+
+/** Disegna il joystick virtuale touch (solo se il dito sinistro è attivo). */
+export function drawTouchControls(
+  g: G,
+  _w: number,
+  _h: number,
+  joystick: { ox: number; oy: number; dx: number; dy: number; active: boolean },
+): void {
+  if (!joystick.active) return;
+  const { ox, oy, dx, dy } = joystick;
+  const knobX = ox + dx * JOYSTICK_RADIUS;
+  const knobY = oy + dy * JOYSTICK_RADIUS;
+
+  // cerchio base
+  g.ctx.save();
+  g.ctx.globalAlpha = 0.35;
+  g.ctx.beginPath();
+  g.ctx.arc(ox, oy, JOYSTICK_RADIUS, 0, Math.PI * 2);
+  g.ctx.fillStyle = "#ffffff";
+  g.ctx.fill();
+  g.ctx.strokeStyle = "#ffffff";
+  g.ctx.lineWidth = 2;
+  g.ctx.stroke();
+
+  // manopola
+  g.ctx.globalAlpha = 0.65;
+  g.ctx.beginPath();
+  g.ctx.arc(knobX, knobY, KNOB_RADIUS, 0, Math.PI * 2);
+  g.ctx.fillStyle = "#ffffff";
+  g.ctx.fill();
+  g.ctx.restore();
+}
