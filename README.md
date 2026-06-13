@@ -209,14 +209,6 @@ automatici), verifica che i nemici muoiano e salva due screenshot. Il secondo av
 con lobby, ci connette un client via TCP su localhost, simula 20 secondi e verifica
 registrazione, movimento remoto, uccisioni e il giro completo del level up via rete.
 
-## Pubblicare su un remote Git
-
-Il repository è già inizializzato e committato. Per il push:
-
-```bash
-git remote add origin https://github.com/<tuo-utente>/cat-survivors.git
-git push -u origin main
-```
 
 ## Licenza
 
