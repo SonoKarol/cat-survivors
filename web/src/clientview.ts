@@ -257,27 +257,34 @@ function drawClientLobby(g: G, s: Snapshot, w: number, h: number): void {
 }
 
 function drawClientEnd(g: G, s: Snapshot, me: PlayerS | null, w: number, h: number, win: boolean, input: Input): void {
-  g.setColor(Ui.OVERLAY);
-  g.fillRect(0, 0, w, h);
-  if (win) {
-    Ui.center(g, "VITTORIA!", Ui.F_TITLE, Ui.GOLD, w / 2, h / 2 - 130);
-    Ui.center(g, "Dieci minuti, zero bagnetti. Il giardino è di nuovo vostro.", Ui.F_BOLD, Ui.GREEN_LT, w / 2, h / 2 - 92);
-  } else {
-    Ui.center(g, "GAME OVER", Ui.F_TITLE, Ui.RED_LT, w / 2, h / 2 - 130);
-    Ui.center(g, "Il giardino ha avuto la meglio... per stavolta.", Ui.F_BOLD, Ui.GREEN_LT, w / 2, h / 2 - 92);
+  const mp = Ui.toUi(w, h, { x: input.mouseX, y: input.mouseY });
+  const rawClick = input.consumeClick();
+  const btn = Ui.endButton(Ui.DESIGN_W, Ui.DESIGN_H);
+  Ui.withUiFit(g, w, h, () => {
+    const dw = Ui.DESIGN_W, dh = Ui.DESIGN_H;
+    g.setColor(Ui.OVERLAY);
+    g.fillRect(0, 0, dw, dh);
+    if (win) {
+      Ui.center(g, "VITTORIA!", Ui.F_TITLE, Ui.GOLD, dw / 2, dh / 2 - 130);
+      Ui.center(g, "Dieci minuti, zero bagnetti. Il giardino è di nuovo vostro.", Ui.F_BOLD, Ui.GREEN_LT, dw / 2, dh / 2 - 92);
+    } else {
+      Ui.center(g, "GAME OVER", Ui.F_TITLE, Ui.RED_LT, dw / 2, dh / 2 - 130);
+      Ui.center(g, "Il giardino ha avuto la meglio... per stavolta.", Ui.F_BOLD, Ui.GREEN_LT, dw / 2, dh / 2 - 92);
+    }
+    if (me !== null) {
+      const cat = CATS[me.catIdx];
+      Ui.center(g, cat.name + "  •  Livello " + me.level + "  •  KO di squadra: " + s.kills
+        + "  •  Tempo: " + fmt(s.time), Ui.F_TEXT, Ui.TEXT, dw / 2, dh / 2 - 40);
+    }
+    const hover = btn.contains(mp.x, mp.y);
+    g.setColor(hover ? Ui.BTN_HOVER : Ui.GOLD);
+    g.fillRoundRect(btn.x, btn.y, btn.width, btn.height, 10);
+    Ui.center(g, "Torna al rifugio (R)", Ui.F_BOLD, Ui.BTN_DARK, btn.x + btn.width / 2, btn.y + 31);
+  });
+  if (rawClick !== null) {
+    const click = Ui.toUi(w, h, rawClick);
+    if (btn.contains(click.x, click.y)) App.backToMenu();
   }
-  if (me !== null) {
-    const cat = CATS[me.catIdx];
-    Ui.center(g, cat.name + "  •  Livello " + me.level + "  •  KO di squadra: " + s.kills
-      + "  •  Tempo: " + fmt(s.time), Ui.F_TEXT, Ui.TEXT, w / 2, h / 2 - 40);
-  }
-  const btn = Ui.endButton(w, h);
-  const hover = btn.contains(input.mouseX, input.mouseY);
-  g.setColor(hover ? Ui.BTN_HOVER : Ui.GOLD);
-  g.fillRoundRect(btn.x, btn.y, btn.width, btn.height, 10);
-  Ui.center(g, "Torna al rifugio (R)", Ui.F_BOLD, Ui.BTN_DARK, btn.x + btn.width / 2, btn.y + 31);
-  const c = input.consumeClick();
-  if (c !== null && btn.contains(c.x, c.y)) App.backToMenu();
 }
 
 function drawMessage(g: G, w: number, h: number, title: string, sub: string, error: boolean): void {
@@ -348,18 +355,23 @@ export function clientFrame(c: Client, input: Input, g: G, w: number, h: number)
   drawHud(g, s, me, w, h);
 
   switch (s.state) {
-    case ST_LOBBY: drawClientLobby(g, s, w, h); break;
+    case ST_LOBBY: Ui.withUiFit(g, w, h, () => drawClientLobby(g, s, Ui.DESIGN_W, Ui.DESIGN_H)); break;
     case ST_PAUSED: Ui.center(g, "PAUSA (host)", Ui.F_H2, Ui.GOLD, w / 2, h / 2); break;
     case ST_LEVELUP: {
-      g.setColor(new Color(8, 14, 9, 190));
-      g.fillRect(0, 0, w, h);
       const cs = c.choices;
       if (cs !== null) {
-        Ui.center(g, "MIAO! Scegli un potenziamento (clic o 1-" + cs.length + ")", Ui.F_H2, Ui.GOLD, w / 2, h / 2 - 140);
-        Ui.drawChoiceCards(g, cs, input.mouseX, input.mouseY, w, h);
-        const click = input.consumeClick();
-        if (click !== null) {
-          const cards = Ui.choiceCards(cs.length, w, h);
+        // mouse/click reali -> spazio di design, come negli overlay scalati
+        const mp = Ui.toUi(w, h, { x: input.mouseX, y: input.mouseY });
+        const rawClick = input.consumeClick();
+        Ui.withUiFit(g, w, h, () => {
+          g.setColor(new Color(8, 14, 9, 190));
+          g.fillRect(0, 0, Ui.DESIGN_W, Ui.DESIGN_H);
+          Ui.center(g, "MIAO! Scegli un potenziamento (clic o 1-" + cs.length + ")", Ui.F_H2, Ui.GOLD, Ui.DESIGN_W / 2, Ui.DESIGN_H / 2 - 140);
+          Ui.drawChoiceCards(g, cs, mp.x, mp.y, Ui.DESIGN_W, Ui.DESIGN_H);
+        });
+        if (rawClick !== null) {
+          const click = Ui.toUi(w, h, rawClick);
+          const cards = Ui.choiceCards(cs.length, Ui.DESIGN_W, Ui.DESIGN_H);
           for (let i = 0; i < cards.length; i++) {
             if (cards[i].contains(click.x, click.y)) { c.sendChoice(i); break; }
           }

@@ -5,7 +5,7 @@
 import { Input } from "./input.ts";
 import { Game } from "./game.ts";
 import { G } from "./g2d.ts";
-import { Ui, drawTouchControls } from "./ui.ts";
+import { Ui, drawTouchControls, drawRotateHint } from "./ui.ts";
 import { App } from "./app.ts";
 import { initSfx } from "./sfx.ts";
 import { clientFrame } from "./clientview.ts";
@@ -57,6 +57,10 @@ function frame(now: number): void {
   }
   if (input.isTouchActive) {
     drawTouchControls(g, logicalW, logicalH, input.touchJoystick());
+  }
+  // gioco landscape: in verticale su mobile invitiamo a ruotare (sopra a tutto)
+  if (input.isTouch && logicalH > logicalW) {
+    drawRotateHint(g, logicalW, logicalH);
   }
 
   requestAnimationFrame(frame);

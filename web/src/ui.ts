@@ -80,15 +80,47 @@ export function panel(g: G, r: Rect, hover: boolean): void {
   g.drawRoundRect(r.x, r.y, r.width, r.height, 14);
 }
 
-// ===== Layout =====
+// ===== Adattamento a schermi piccoli =====
+// Le schermate a tutto schermo (menu, lobby, level-up, pausa, fine) sono disegnate
+// in uno spazio di design fisso e poi scalate/centrate per entrare nello schermo
+// reale. Senza questo, su un telefono in orizzontale (molto basso, ~300px) i bottoni
+// del menu finiscono disegnati SOTTO il bordo del canvas e spariscono. Disegno e
+// hit-test usano la stessa trasformazione (uiFit), così i clic restano allineati.
+export const DESIGN_W = 1280;
+export const DESIGN_H = 720;
 
-function menuCards(g: Game): Rect[] {
+export function uiFit(w: number, h: number): { s: number; ox: number; oy: number } {
+  const s = Math.min(w / DESIGN_W, h / DESIGN_H, 1);
+  return { s, ox: (w - DESIGN_W * s) / 2, oy: (h - DESIGN_H * s) / 2 };
+}
+
+/** Disegna draw() nello spazio di design (DESIGN_W×DESIGN_H) scalato dentro (w,h) reali. */
+export function withUiFit(g: G, w: number, h: number, draw: () => void): void {
+  const { s, ox, oy } = uiFit(w, h);
+  g.save();
+  g.translate(ox, oy);
+  g.scale(s, s);
+  draw();
+  g.restore();
+}
+
+/** Converte un punto dello schermo reale in coordinate di design (per l'hit-test). */
+export function toUi(w: number, h: number, p: Point): Point {
+  const { s, ox, oy } = uiFit(w, h);
+  return { x: (p.x - ox) / s, y: (p.y - oy) / s };
+}
+
+// ===== Layout =====
+// I layout lavorano sempre nello spazio di design (DESIGN_W×DESIGN_H): vengono poi
+// scalati da withUiFit. Niente più dipendenza da g.viewW/g.viewH per questi.
+
+function menuCards(): Rect[] {
   const n = CATS.length;
   const cols = 4, cw = 215, ch = 240, gap = 14;
   const rows = Math.ceil(n / cols);
   const gw = cols * cw + (cols - 1) * gap;
-  const x0 = (g.viewW - gw) / 2;
-  const y0 = Math.max(128, (g.viewH - (rows * ch + (rows - 1) * gap) - 60) / 2);
+  const x0 = (DESIGN_W - gw) / 2;
+  const y0 = Math.max(128, (DESIGN_H - (rows * ch + (rows - 1) * gap) - 60) / 2);
   const out: Rect[] = [];
   for (let i = 0; i < n; i++) {
     out.push(new Rect(x0 + (i % cols) * (cw + gap), y0 + Math.floor(i / cols) * (ch + gap), cw, ch));
@@ -96,13 +128,13 @@ function menuCards(g: Game): Rect[] {
   return out;
 }
 
-function menuButtons(g: Game): Rect[] {
-  const cards = menuCards(g);
+function menuButtons(): Rect[] {
+  const cards = menuCards();
   const last = cards[cards.length - 1];
   const y = last.y + last.height + 14;
   const bw = 230, bh = 44, gap = 14;
   const total = MENU_BUTTONS.length * bw + (MENU_BUTTONS.length - 1) * gap;
-  const x0 = (g.viewW - total) / 2;
+  const x0 = (DESIGN_W - total) / 2;
   const out: Rect[] = [];
   for (let i = 0; i < MENU_BUTTONS.length; i++) out.push(new Rect(x0 + i * (bw + gap), y, bw, bh));
   return out;
@@ -131,11 +163,13 @@ function drawMenu(game: Game, g: G, w: number, h: number): void {
   center(g, "Il giardino è invaso. Scegli il tuo gatto, da solo o con gli amici (co-op fino a 4).",
     F_BOLD, GREEN_LT, w / 2, 90);
 
-  const cards = menuCards(game);
+  // il mouse è in coordinate reali: lo portiamo nello spazio di design come i rettangoli
+  const mp = toUi(game.viewW, game.viewH, { x: game.input.mouseX, y: game.input.mouseY });
+  const cards = menuCards();
   for (let i = 0; i < cards.length; i++) {
     const r = cards[i];
     const cat = CATS[i];
-    const hover = r.contains(game.input.mouseX, game.input.mouseY);
+    const hover = r.contains(mp.x, mp.y);
     const selected = App.selectedCat === i;
     g.setColor(hover || selected ? PANEL_HOVER : PANEL);
     g.fillRoundRect(r.x, r.y, r.width, r.height, 14);
@@ -163,10 +197,10 @@ function drawMenu(game: Game, g: G, w: number, h: number): void {
     g.drawString(wd.name, r.x + r.width / 2 - 44, r.y + 225);
   }
 
-  const btns = menuButtons(game);
+  const btns = menuButtons();
   for (let i = 0; i < btns.length; i++) {
     const b = btns[i];
-    const hover = b.contains(game.input.mouseX, game.input.mouseY);
+    const hover = b.contains(mp.x, mp.y);
     g.setColor(hover ? BTN_HOVER : GOLD);
     g.fillRoundRect(b.x, b.y, b.width, b.height, 10);
     center(g, MENU_BUTTONS[i], F_BOLD, BTN_DARK, b.x + b.width / 2, b.y + 28);
@@ -415,7 +449,8 @@ function drawLevelUp(game: Game, g: G, w: number, h: number): void {
   }
   center(g, "MIAO! Livello " + me!.level + "!", F_H2, GOLD, w / 2, h / 2 - 160);
   center(g, "Scegli un potenziamento (clic o tasti 1-" + game.choices!.length + ")", F_TEXT, GREEN_LT, w / 2, h / 2 - 134);
-  drawChoiceCards(g, game.choices!, game.input.mouseX, game.input.mouseY, w, h);
+  const mp = toUi(game.viewW, game.viewH, { x: game.input.mouseX, y: game.input.mouseY });
+  drawChoiceCards(g, game.choices!, mp.x, mp.y, w, h);
 }
 
 /** Carte di scelta: condivise tra host e client. */
@@ -492,7 +527,8 @@ function drawEnd(game: Game, g: G, w: number, h: number, win: boolean): void {
     g.drawString("Armi: " + p.weapons.length + "  •  Passivi: " + p.passives.size, box.x + 104, box.y + 138);
   }
   const btn = endButton(w, h);
-  const hover = btn.contains(game.input.mouseX, game.input.mouseY);
+  const mp = toUi(game.viewW, game.viewH, { x: game.input.mouseX, y: game.input.mouseY });
+  const hover = btn.contains(mp.x, mp.y);
   g.setColor(hover ? BTN_HOVER : GOLD);
   g.fillRoundRect(btn.x, btn.y, btn.width, btn.height, 10);
   center(g, "Torna al rifugio (R)", F_BOLD, BTN_DARK, btn.x + btn.width / 2, btn.y + 31);
@@ -504,12 +540,14 @@ export const Ui = {
   handleInput(game: Game): void {
     const inp = game.input;
     if (App.roomActive()) App.joinType(); // caratteri per il campo codice
-    // il click viene valutato nel punto esatto della pressione, non dove il mouse è ora
-    const c: Point | null = inp.consumeClick();
+    // il click viene valutato nel punto esatto della pressione, non dove il mouse è ora;
+    // lo convertiamo nello spazio di design degli overlay (vedi toUi/withUiFit)
+    const raw = inp.consumeClick();
+    const c: Point | null = raw === null ? null : toUi(game.viewW, game.viewH, raw);
     switch (game.state) {
       case "MENU": {
         if (c === null || App.roomActive() || App.connecting) return;
-        const btns = menuButtons(game);
+        const btns = menuButtons();
         for (let i = 0; i < btns.length; i++) {
           if (btns[i].contains(c.x, c.y)) {
             if (i === 0) App.solo();
@@ -518,7 +556,7 @@ export const Ui = {
             return;
           }
         }
-        const cards = menuCards(game);
+        const cards = menuCards();
         for (let i = 0; i < cards.length; i++) {
           if (cards[i].contains(c.x, c.y)) {
             App.selectedCat = i;
@@ -530,7 +568,7 @@ export const Ui = {
       }
       case "LEVELUP": {
         if (c !== null && game.choices !== null && game.leveling === game.localPlayer()) {
-          const cards = choiceCards(game.choices.length, game.viewW, game.viewH);
+          const cards = choiceCards(game.choices.length, DESIGN_W, DESIGN_H);
           for (let i = 0; i < cards.length && i < game.choices.length; i++) {
             if (cards[i].contains(c.x, c.y)) {
               game.pickChoice(game.choices[i]);
@@ -542,21 +580,23 @@ export const Ui = {
       }
       case "OVER":
       case "WIN": {
-        if (c !== null && endButton(game.viewW, game.viewH).contains(c.x, c.y)) game.toMenu();
+        if (c !== null && endButton(DESIGN_W, DESIGN_H).contains(c.x, c.y)) game.toMenu();
         break;
       }
     }
   },
 
   draw(game: Game, g: G, w: number, h: number): void {
+    // gli overlay sono disegnati nello spazio di design scalato; l'HUD di gioco resta a
+    // dimensioni reali (riempie lo schermo, ancorato ai bordi)
     switch (game.state) {
-      case "MENU": drawMenu(game, g, w, h); break;
-      case "LOBBY": drawLobby(game, g, w, h); break;
+      case "MENU": withUiFit(g, w, h, () => drawMenu(game, g, DESIGN_W, DESIGN_H)); break;
+      case "LOBBY": withUiFit(g, w, h, () => drawLobby(game, g, DESIGN_W, DESIGN_H)); break;
       case "PLAYING": drawHud(game, g, w, h); break;
-      case "LEVELUP": drawHud(game, g, w, h); drawLevelUp(game, g, w, h); break;
-      case "PAUSED": drawHud(game, g, w, h); drawPause(game, g, w, h); break;
-      case "OVER": drawEnd(game, g, w, h, false); break;
-      case "WIN": drawEnd(game, g, w, h, true); break;
+      case "LEVELUP": drawHud(game, g, w, h); withUiFit(g, w, h, () => drawLevelUp(game, g, DESIGN_W, DESIGN_H)); break;
+      case "PAUSED": drawHud(game, g, w, h); withUiFit(g, w, h, () => drawPause(game, g, DESIGN_W, DESIGN_H)); break;
+      case "OVER": withUiFit(g, w, h, () => drawEnd(game, g, DESIGN_W, DESIGN_H, false)); break;
+      case "WIN": withUiFit(g, w, h, () => drawEnd(game, g, DESIGN_W, DESIGN_H, true)); break;
     }
   },
 };
@@ -594,4 +634,26 @@ export function drawTouchControls(
   g.ctx.fillStyle = "#ffffff";
   g.ctx.fill();
   g.ctx.restore();
+}
+
+/**
+ * Overlay mostrato in verticale sui dispositivi touch: il gioco è landscape, quindi
+ * invita a ruotare il telefono. Copre lo schermo per nascondere il layout compresso.
+ */
+export function drawRotateHint(g: G, w: number, h: number): void {
+  const ctx = g.ctx;
+  ctx.save();
+  ctx.fillStyle = "#0a0d09";
+  ctx.fillRect(0, 0, w, h);
+  // telefono stilizzato in orizzontale (la posizione "giusta")
+  const cx = w / 2, cy = h / 2 - 20;
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = "#ffd166";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(-65, -38, 130, 76);
+  ctx.fillStyle = "rgba(255,209,102,0.16)";
+  ctx.fillRect(-55, -28, 100, 56);
+  ctx.restore();
+  center(g, "RUOTA IL TELEFONO", F_H2, GOLD, w / 2, cy + 95);
+  center(g, "Gioca in orizzontale per vedere tutto", F_TEXT, TEXT, w / 2, cy + 125);
 }
