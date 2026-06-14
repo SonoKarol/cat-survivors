@@ -40,7 +40,7 @@ export const F_HUD = "bold 15px sans-serif";
 const F_SLOT = "bold 10px sans-serif";
 const F_MONO = "bold 22px monospace";
 
-const MENU_BUTTONS = ["GIOCA DA SOLO", "CREA STANZA", "ENTRA IN STANZA"];
+const MENU_BUTTONS = ["PLAY SOLO", "HOST CO-OP", "JOIN A FRIEND"];
 
 // ===== Helper di testo =====
 
@@ -154,13 +154,47 @@ export function endButton(viewW: number, viewH: number): Rect {
   return new Rect(viewW / 2 - 140, viewH / 2 + 150, 280, 48);
 }
 
+// Bottoni touch per le azioni che su mobile non hanno tastiera (start lobby,
+// ripresa pausa, conferma/annulla codice stanza). Le hitbox stanno nello spazio
+// di design, come le carte/menu, e sono testate in Ui.handleInput.
+export function lobbyButtons(viewW: number, viewH: number): { start: Rect; cancel: Rect } {
+  const bw = 200, bh = 48, gap = 24;
+  const y = viewH / 2 + 132;
+  const x0 = viewW / 2 - bw - gap / 2;
+  return { start: new Rect(x0, y, bw, bh), cancel: new Rect(x0 + bw + gap, y, bw, bh) };
+}
+
+export function resumeButton(viewW: number, viewH: number): Rect {
+  return new Rect(viewW / 2 - 110, viewH / 2 + 84, 220, 48);
+}
+
+export function joinButtons(viewW: number, viewH: number): { confirm: Rect; cancel: Rect } {
+  const bw = 180, bh = 40, gap = 20;
+  const y = viewH / 2 + 36;
+  const x0 = viewW / 2 - bw - gap / 2;
+  return { confirm: new Rect(x0, y, bw, bh), cancel: new Rect(x0 + bw + gap, y, bw, bh) };
+}
+
+/** Disegna un bottone rettangolare con stato hover, nello spazio di design. */
+function drawButton(g: G, mp: Point, r: Rect, label: string): void {
+  const hover = r.contains(mp.x, mp.y);
+  g.setColor(hover ? BTN_HOVER : GOLD);
+  g.fillRoundRect(r.x, r.y, r.width, r.height, 10);
+  center(g, label, F_BOLD, BTN_DARK, r.x + r.width / 2, r.y + r.height / 2 + 5);
+}
+
+/** Punto del cursore/tocco nello spazio di design (per l'hover dei bottoni). */
+function uiMouse(game: Game): Point {
+  return toUi(game.viewW, game.viewH, { x: game.input.mouseX, y: game.input.mouseY });
+}
+
 // ===== Disegno =====
 
 function drawMenu(game: Game, g: G, w: number, h: number): void {
   g.setColor(OVERLAY);
   g.fillRect(0, 0, w, h);
   center(g, "CAT SURVIVORS", F_TITLE, GOLD, w / 2, 58);
-  center(g, "Il giardino è invaso. Scegli il tuo gatto, da solo o con gli amici (co-op fino a 4).",
+  center(g, "The garden is overrun. Pick your cat and survive — solo or with friends (co-op up to 4).",
     F_BOLD, GREEN_LT, w / 2, 90);
 
   // il mouse è in coordinate reali: lo portiamo nello spazio di design come i rettangoli
@@ -208,22 +242,22 @@ function drawMenu(game: Game, g: G, w: number, h: number): void {
 
   const st = App.status;
   if (st !== "") {
-    center(g, st, F_TEXT, st.startsWith("Connessione fallita") || st.startsWith("Impossibile") ? RED_LT : GOLD,
+    center(g, st, F_TEXT, st.startsWith("Connection failed") || st.startsWith("Unable") ? RED_LT : GOLD,
       w / 2, btns[0].y + 66);
   }
-  center(g, "WASD / frecce per muoverti  •  mira col mouse  •  P pausa  •  M audio on/off",
+  center(g, "WASD / arrows to move  •  aim with mouse  •  P pause  •  M audio on/off",
     F_SMALL, HINT, w / 2, h - 14);
 
-  if (App.roomActive()) drawJoinInput(g, w, h);
+  if (App.roomActive()) drawJoinInput(game, g, w, h);
 }
 
-function drawJoinInput(g: G, w: number, h: number): void {
+function drawJoinInput(game: Game, g: G, w: number, h: number): void {
   g.setColor(new Color(0, 0, 0, 160));
   g.fillRect(0, 0, w, h);
   const box = new Rect(w / 2 - 250, h / 2 - 90, 500, 180);
   panel(g, box, true);
-  center(g, "Entra in una stanza", F_BOLD, GOLD, w / 2, box.y + 36);
-  center(g, "Scrivi il codice stanza che ti ha dato il tuo amico", F_TEXT, TEXT, w / 2, box.y + 62);
+  center(g, "Join a room", F_BOLD, GOLD, w / 2, box.y + 36);
+  center(g, "Enter the room code your friend shared with you", F_TEXT, TEXT, w / 2, box.y + 62);
   const field = new Rect(box.x + 40, box.y + 80, box.width - 80, 38);
   g.setColor(Color.rgb(0x0d150d));
   g.fillRoundRect(field.x, field.y, field.width, field.height, 8);
@@ -234,7 +268,10 @@ function drawJoinInput(g: G, w: number, h: number): void {
   g.setFont(F_MONO);
   g.setColor(Color.rgb(0xffffff));
   g.drawString(txt + (cursor ? "_" : ""), field.x + 12, field.y + 27);
-  center(g, "INVIO conferma  •  ESC annulla", F_SMALL, HINT, w / 2, box.y + 150);
+  const jb = joinButtons(w, h);
+  const mp = uiMouse(game);
+  drawButton(g, mp, jb.confirm, "CONFIRM");
+  drawButton(g, mp, jb.cancel, "CANCEL");
 }
 
 function drawLobby(game: Game, g: G, w: number, h: number): void {
@@ -242,27 +279,30 @@ function drawLobby(game: Game, g: G, w: number, h: number): void {
   g.fillRect(0, 0, w, h);
   const box = new Rect(w / 2 - 290, h / 2 - 200, 580, 400);
   panel(g, box, false);
-  center(g, "LOBBY CO-OP", F_H2, GOLD, w / 2, box.y + 42);
+  center(g, "CO-OP LOBBY", F_H2, GOLD, w / 2, box.y + 42);
 
   // codice stanza da condividere con gli amici
-  center(g, "Codice stanza:", F_SMALL, GREEN_LT, w / 2, box.y + 96);
+  center(g, "Room code:", F_SMALL, GREEN_LT, w / 2, box.y + 96);
   center(g, App.roomCode !== "" ? App.roomCode : "...", F_MONO, BLUE_LT, w / 2, box.y + 130);
-  center(g, "Condividi questo codice: i tuoi amici lo digitano in \"ENTRA IN STANZA\".",
+  center(g, "Share this code: your friends enter it under \"JOIN A FRIEND\".",
     F_SMALL, HINT, w / 2, box.y + 156);
   const up = App.status;
   if (up !== "") center(g, up, F_SMALL, GOLD, w / 2, box.y + 180);
 
   let y = box.y + 226;
-  center(g, "Gatti pronti (" + game.players.length + "/" + MAX_PLAYERS + "):", F_BOLD, GREEN_LT, w / 2, y);
+  center(g, "Cats ready (" + game.players.length + "/" + MAX_PLAYERS + "):", F_BOLD, GREEN_LT, w / 2, y);
   y += 18;
   const n = game.players.length;
   const x0 = w / 2 - n * 45 + 45 / 2;
   for (let i = 0; i < n; i++) {
     const p = game.players[i];
     g.ctx.drawImage(Sprites.catBig(p.cat), x0 + i * 90 - 24, y, 48, 48);
-    center(g, p.cat.name + (p.pid === 0 ? " (tu)" : ""), F_SMALL, TEXT, x0 + i * 90, y + 62);
+    center(g, p.cat.name + (p.pid === 0 ? " (you)" : ""), F_SMALL, TEXT, x0 + i * 90, y + 62);
   }
-  center(g, "INVIO — si parte!     ESC — annulla", F_BOLD, GOLD, w / 2, box.y + 376);
+  const lb = lobbyButtons(w, h);
+  const mp = uiMouse(game);
+  drawButton(g, mp, lb.start, "START");
+  drawButton(g, mp, lb.cancel, "CANCEL");
 }
 
 function drawHud(game: Game, g: G, w: number, h: number): void {
@@ -281,12 +321,12 @@ function drawHud(game: Game, g: G, w: number, h: number): void {
   // riga superiore
   g.setFont(F_HUD);
   g.setColor(BLUE_LT);
-  g.drawString("LV " + p.level, 12, 36);
+  g.drawString("Lv. " + p.level, 12, 36);
   center(g, fmtTime(game.time), F_TIMER, GOLD, w / 2, 46);
   g.setColor(TEXT);
   right(g, "KO " + game.kills, F_HUD, w - 12, 36);
   g.setColor(Color.rgb(0xff8c8c));
-  right(g, "PS " + Math.ceil(p.hp) + "/" + Math.trunc(p.stats.maxHp), F_HUD, w - 12, 56);
+  right(g, "HP " + Math.ceil(p.hp) + "/" + Math.trunc(p.stats.maxHp), F_HUD, w - 12, 56);
   if (muted) right(g, "AUDIO OFF [M]", F_SMALL, w - 12, 74);
   // slot armi e passivi
   let sx = 12, sy = 52;
@@ -442,13 +482,13 @@ function drawLevelUp(game: Game, g: G, w: number, h: number): void {
   g.fillRect(0, 0, w, h);
   const me = game.localPlayer();
   if (game.leveling !== me) {
-    const who = game.leveling !== null ? game.leveling.cat.name : "un amico";
-    center(g, who + " sta scegliendo un potenziamento...", F_H2, GOLD, w / 2, h / 2 - 10);
-    center(g, "(il mondo trattiene il fiato)", F_TEXT, HINT, w / 2, h / 2 + 22);
+    const who = game.leveling !== null ? game.leveling.cat.name : "a friend";
+    center(g, who + " is choosing an upgrade...", F_H2, GOLD, w / 2, h / 2 - 10);
+    center(g, "(the world holds its breath)", F_TEXT, HINT, w / 2, h / 2 + 22);
     return;
   }
-  center(g, "MIAO! Livello " + me!.level + "!", F_H2, GOLD, w / 2, h / 2 - 160);
-  center(g, "Scegli un potenziamento (clic o tasti 1-" + game.choices!.length + ")", F_TEXT, GREEN_LT, w / 2, h / 2 - 134);
+  center(g, "MEOW! Level " + me!.level + "!", F_H2, GOLD, w / 2, h / 2 - 160);
+  center(g, "Choose an upgrade (click or keys 1-" + game.choices!.length + ")", F_TEXT, GREEN_LT, w / 2, h / 2 - 134);
   const mp = toUi(game.viewW, game.viewH, { x: game.input.mouseX, y: game.input.mouseY });
   drawChoiceCards(g, game.choices!, mp.x, mp.y, w, h);
 }
@@ -479,7 +519,7 @@ export function drawChoiceCards(g: G, choices: { name: string; lvlText: string; 
 function drawPause(game: Game, g: G, w: number, h: number): void {
   g.setColor(new Color(8, 14, 9, 190));
   g.fillRect(0, 0, w, h);
-  center(g, "PAUSA", F_H2, GOLD, w / 2, h / 2 - 120);
+  center(g, "PAUSE", F_H2, GOLD, w / 2, h / 2 - 120);
   const p = game.localPlayer();
   if (p === null) return;
   center(g, p.cat.name + " — " + p.cat.breed, F_BOLD, GREEN_LT, w / 2, h / 2 - 84);
@@ -494,21 +534,22 @@ function drawPause(game: Game, g: G, w: number, h: number): void {
     slot(g, bx, by, Sprites.icon(id), lvl);
     bx += 46;
   }
-  center(g, "Tempo: " + fmtTime(game.time) + "   •   Livello " + p.level + "   •   KO " + game.kills,
+  center(g, "Time: " + fmtTime(game.time) + "   •   Level " + p.level + "   •   KO " + game.kills,
     F_TEXT, TEXT, w / 2, h / 2 + 30);
-  const extra = game.isCoop() ? "   (la pausa ferma anche i tuoi amici!)" : "";
-  center(g, "P o Esc per riprendere  •  M audio on/off" + extra, F_TEXT, HINT, w / 2, h / 2 + 60);
+  const extra = game.isCoop() ? "   (pausing also pauses your friends!)" : "";
+  center(g, "P or Esc to resume  •  M audio on/off" + extra, F_TEXT, HINT, w / 2, h / 2 + 60);
+  drawButton(g, uiMouse(game), resumeButton(w, h), "RESUME");
 }
 
 function drawEnd(game: Game, g: G, w: number, h: number, win: boolean): void {
   g.setColor(OVERLAY);
   g.fillRect(0, 0, w, h);
   if (win) {
-    center(g, "VITTORIA!", F_TITLE, GOLD, w / 2, h / 2 - 150);
-    center(g, "Dieci minuti, zero bagnetti. Il giardino è di nuovo vostro.", F_BOLD, GREEN_LT, w / 2, h / 2 - 112);
+    center(g, "VICTORY!", F_TITLE, GOLD, w / 2, h / 2 - 150);
+    center(g, "Ten minutes, zero baths. The garden is yours again.", F_BOLD, GREEN_LT, w / 2, h / 2 - 112);
   } else {
     center(g, "GAME OVER", F_TITLE, RED_LT, w / 2, h / 2 - 150);
-    center(g, "Il giardino ha avuto la meglio... per stavolta.", F_BOLD, GREEN_LT, w / 2, h / 2 - 112);
+    center(g, "The garden won this time... but you'll be back.", F_BOLD, GREEN_LT, w / 2, h / 2 - 112);
   }
   const p = game.localPlayer();
   const box = new Rect(w / 2 - 180, h / 2 - 80, 360, 180);
@@ -520,18 +561,18 @@ function drawEnd(game: Game, g: G, w: number, h: number, win: boolean): void {
     g.drawString(p.cat.name, box.x + 104, box.y + 38);
     g.setFont(F_TEXT);
     g.setColor(TEXT);
-    g.drawString("Razza: " + p.cat.breed, box.x + 104, box.y + 58);
-    g.drawString("Sopravvissuto: " + fmtTime(game.time), box.x + 104, box.y + 78);
-    g.drawString("Livello raggiunto: " + p.level, box.x + 104, box.y + 98);
-    g.drawString("Nemici sconfitti (squadra): " + game.kills, box.x + 104, box.y + 118);
-    g.drawString("Armi: " + p.weapons.length + "  •  Passivi: " + p.passives.size, box.x + 104, box.y + 138);
+    g.drawString("Breed: " + p.cat.breed, box.x + 104, box.y + 58);
+    g.drawString("Survived: " + fmtTime(game.time), box.x + 104, box.y + 78);
+    g.drawString("Level reached: " + p.level, box.x + 104, box.y + 98);
+    g.drawString("Enemies defeated (team): " + game.kills, box.x + 104, box.y + 118);
+    g.drawString("Weapons: " + p.weapons.length + "  •  Passives: " + p.passives.size, box.x + 104, box.y + 138);
   }
   const btn = endButton(w, h);
   const mp = toUi(game.viewW, game.viewH, { x: game.input.mouseX, y: game.input.mouseY });
   const hover = btn.contains(mp.x, mp.y);
   g.setColor(hover ? BTN_HOVER : GOLD);
   g.fillRoundRect(btn.x, btn.y, btn.width, btn.height, 10);
-  center(g, "Torna al rifugio (R)", F_BOLD, BTN_DARK, btn.x + btn.width / 2, btn.y + 31);
+  center(g, "Back to shelter (R)", F_BOLD, BTN_DARK, btn.x + btn.width / 2, btn.y + 31);
 }
 
 // ===== API pubblica =====
@@ -546,7 +587,14 @@ export const Ui = {
     const c: Point | null = raw === null ? null : toUi(game.viewW, game.viewH, raw);
     switch (game.state) {
       case "MENU": {
-        if (c === null || App.roomActive() || App.connecting) return;
+        if (c === null || App.connecting) return;
+        if (App.roomActive()) {
+          // pannello "Join a friend": bottoni CONFIRM / CANCEL al posto di INVIO/ESC
+          const jb = joinButtons(DESIGN_W, DESIGN_H);
+          if (jb.confirm.contains(c.x, c.y)) App.joinKey("Enter");
+          else if (jb.cancel.contains(c.x, c.y)) App.joinKey("Escape");
+          return;
+        }
         const btns = menuButtons();
         for (let i = 0; i < btns.length; i++) {
           if (btns[i].contains(c.x, c.y)) {
@@ -576,6 +624,17 @@ export const Ui = {
             }
           }
         }
+        break;
+      }
+      case "LOBBY": {
+        if (c === null) return;
+        const lb = lobbyButtons(DESIGN_W, DESIGN_H);
+        if (lb.start.contains(c.x, c.y)) game.startRunMulti();
+        else if (lb.cancel.contains(c.x, c.y)) game.toMenu();
+        break;
+      }
+      case "PAUSED": {
+        if (c !== null && resumeButton(DESIGN_W, DESIGN_H).contains(c.x, c.y)) game.state = "PLAYING";
         break;
       }
       case "OVER":
@@ -654,6 +713,6 @@ export function drawRotateHint(g: G, w: number, h: number): void {
   ctx.fillStyle = "rgba(255,209,102,0.16)";
   ctx.fillRect(-55, -28, 100, 56);
   ctx.restore();
-  center(g, "RUOTA IL TELEFONO", F_H2, GOLD, w / 2, cy + 95);
-  center(g, "Gioca in orizzontale per vedere tutto", F_TEXT, TEXT, w / 2, cy + 125);
+  center(g, "ROTATE YOUR PHONE", F_H2, GOLD, w / 2, cy + 95);
+  center(g, "Play in landscape to see everything", F_TEXT, TEXT, w / 2, cy + 125);
 }

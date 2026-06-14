@@ -34,10 +34,30 @@ class AppState {
   joinField: string | null = null;
   // codice della stanza attiva (mostrato in lobby per condividerlo)
   roomCode = "";
+  // input HTML nascosto: su mobile serve un vero elemento focalizzato per far
+  // comparire la tastiera software (il campo visibile è disegnato sul canvas)
+  private roomInput: HTMLInputElement | null = null;
 
   init(game: Game, input: Input): void {
     this.game = game;
     this.input = input;
+    const el = document.getElementById("roomInput") as HTMLInputElement | null;
+    this.roomInput = el;
+    if (el !== null) {
+      // su touch i caratteri arrivano da qui (la tastiera software spesso non
+      // genera keydown affidabili): il valore dell'input è la fonte autorevole.
+      el.addEventListener("input", () => {
+        if (this.joinField === null) return;
+        const v = el.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8);
+        if (el.value !== v) el.value = v;
+        this.joinField = v;
+      });
+      el.addEventListener("keydown", (e) => {
+        if (this.joinField === null) return;
+        if (e.key === "Enter") { e.preventDefault(); this.joinKey("Enter"); }
+        else if (e.key === "Escape") { e.preventDefault(); this.joinKey("Escape"); }
+      });
+    }
   }
 
   roomActive(): boolean { return this.joinField !== null; }
@@ -45,6 +65,25 @@ class AppState {
   openJoinInput(): void {
     this.joinField = "";
     this.status = "";
+    const el = this.roomInput;
+    if (el !== null) {
+      el.value = "";
+      // il focus fa comparire la tastiera software su mobile (gesto utente: il
+      // tocco sul bottone JOIN). Su desktop non serve: si continua via nextTyped.
+      if (this.input.isTouch) el.focus();
+    }
+  }
+
+  /** Dà il focus all'input nascosto per far comparire la tastiera software.
+   *  Va chiamato dentro un gesto di tocco (vedi Input.onTap). */
+  focusRoomInput(): void {
+    if (this.roomInput !== null) this.roomInput.focus();
+  }
+
+  /** Chiude l'input nascosto (svuota e toglie il focus/tastiera). */
+  private closeRoomInput(): void {
+    const el = this.roomInput;
+    if (el !== null) { el.value = ""; el.blur(); }
   }
 
   /** Tasti speciali del campo codice (i caratteri arrivano da Input.nextTyped). */
@@ -52,17 +91,21 @@ class AppState {
     if (this.joinField === null) return;
     if (code === "Escape") {
       this.joinField = null;
+      this.closeRoomInput();
     } else if (code === "Backspace") {
       if (this.joinField.length > 0) this.joinField = this.joinField.slice(0, -1);
     } else if (code === "Enter") {
       const room = this.joinField.trim();
       this.joinField = null;
+      this.closeRoomInput();
       if (room.length > 0) this.connectRoom(room);
     }
   }
 
-  /** Aggiunge i caratteri digitati al codice (lettere/cifre, maiuscole, max 8). */
+  /** Aggiunge i caratteri digitati al codice (lettere/cifre, maiuscole, max 8).
+   *  Saltato quando l'input nascosto ha il focus: lì la fonte è il suo valore. */
   joinType(): void {
+    if (this.roomInput !== null && document.activeElement === this.roomInput) return;
     let ch: string | null;
     while ((ch = this.input.nextTyped()) !== null) {
       if (this.joinField !== null && this.joinField.length < 8 && /[a-zA-Z0-9]/.test(ch)) {
@@ -90,15 +133,15 @@ class AppState {
   host(): void {
     const code = this.generateRoomCode();
     this.roomCode = code;
-    this.status = "Apertura stanza...";
+    this.status = "Opening room...";
     this.game.startHosting(CATS[this.selectedCat]);
     const url = RELAY_URL + "?room=" + code + "&role=host";
     const server = new Host(
       this.game,
       url,
-      () => { this.status = "Stanza pronta! Condividi il codice " + code; },
+      () => { this.status = "Room ready! Share the code " + code; },
       (err) => {
-        this.status = "Relay non raggiungibile: " + err;
+        this.status = "Relay unreachable: " + err;
         this.roomCode = "";
         if (this.game.state === "LOBBY") this.game.toMenu();
       },
@@ -110,7 +153,7 @@ class AppState {
   connectRoom(room: string): void {
     if (this.connecting) return;
     this.connecting = true;
-    this.status = "Connessione a " + room + "...";
+    this.status = "Connecting to " + room + "...";
     const client = new Client();
     const url = RELAY_URL + "?room=" + room.toUpperCase() + "&role=client";
     client.connect(url, this.selectedCat).then(() => {
@@ -120,7 +163,7 @@ class AppState {
       this.connecting = false;
     }).catch((e: Error) => {
       client.close();
-      this.status = "Connessione fallita: " + e.message;
+      this.status = "Connection failed: " + e.message;
       this.connecting = false;
     });
   }

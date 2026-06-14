@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
-    <title>Cat Survivors — miagola e sopravvivi</title>
+    <title>Cat Survivors — meow and survive</title>
     <style>
       html, body {
         margin: 0;
@@ -31,10 +31,28 @@
       @media (pointer: coarse) {
         #game { cursor: none; }
       }
+      /* Input reale usato solo per far comparire la tastiera software su mobile
+         quando si digita il codice stanza: invisibile ma NON display:none (servono
+         focus e tastiera). Il campo visibile resta disegnato sul canvas. */
+      #roomInput {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        color: transparent;
+        caret-color: transparent;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
+    <input id="roomInput" type="text" inputmode="text" autocapitalize="characters"
+           autocomplete="off" autocorrect="off" spellcheck="false" maxlength="8" aria-hidden="true" />
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
