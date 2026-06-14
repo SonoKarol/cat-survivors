@@ -35,16 +35,16 @@ export const DURATION = 600; // 10 minuti per vincere
 export const ENEMY_TYPES = new Map<string, EnemyDef>();
 function put(d: EnemyDef) { ENEMY_TYPES.set(d.id, d); }
 
-put(new EnemyDef("cetriolo", "Cetriolo", 12, 55, 6, 12, 1, false));
-put(new EnemyDef("piccione", "Piccione", 8, 100, 5, 11, 1, false));
-put(new EnemyDef("topo", "Topo Robot", 25, 72, 8, 11, 2, false));
-put(new EnemyDef("anatra", "Anatra di Gomma", 45, 60, 10, 13, 3, false));
-put(new EnemyDef("cetriolone", "Cetriolone", 95, 45, 12, 19, 5, false));
-put(new EnemyDef("spruzzino", "Spruzzino d'Acqua", 70, 88, 11, 14, 4, false));
-put(new EnemyDef("aspirapolvere", "Aspirapolvere", 230, 38, 16, 20, 8, false));
+put(new EnemyDef("cetriolo", "Cucumber", 12, 55, 6, 12, 1, false));
+put(new EnemyDef("piccione", "Pigeon", 8, 100, 5, 11, 1, false));
+put(new EnemyDef("topo", "Robot Mouse", 25, 72, 8, 11, 2, false));
+put(new EnemyDef("anatra", "Rubber Duck", 45, 60, 10, 13, 3, false));
+put(new EnemyDef("cetriolone", "Giant Cucumber", 95, 45, 12, 19, 5, false));
+put(new EnemyDef("spruzzino", "Water Squirter", 70, 88, 11, 14, 4, false));
+put(new EnemyDef("aspirapolvere", "Vacuum", 230, 38, 16, 20, 8, false));
 put(new EnemyDef("roomba", "Roomba 9000", 1300, 62, 20, 32, 50, true));
-put(new EnemyDef("phon", "Phon Turbo", 3600, 74, 25, 28, 80, true));
-put(new EnemyDef("veterinario", "Dott. Forbici, il Veterinario", 9500, 130, 30, 34, 150, true));
+put(new EnemyDef("phon", "Turbo Hair Dryer", 3600, 74, 25, 28, 80, true));
+put(new EnemyDef("veterinario", "Dr. Scissors, the Vet", 9500, 130, 30, 34, 150, true));
 
 export const WAVES: readonly Wave[] = [
   new Wave(0,   ["cetriolo"], 0.9, 25),

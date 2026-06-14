@@ -58,9 +58,9 @@ export function fin(
 export const WEAPONS = new Map<string, WeaponDef>();
 function put(d: WeaponDef) { WEAPONS.set(d.id, d); }
 
-put(new WeaponDef("graffio", "Graffio Felino",
-  "Zampata rapida davanti a sé. L'arma di chi non ha paura di niente.",
-  6, ["Un graffio extra alle spalle", "Danno +8", "Area +25%", "Danno +10", "Un graffio extra"],
+put(new WeaponDef("graffio", "Feline Scratch",
+  "Quick swipe in front. The weapon of the fearless.",
+  6, ["Extra scratch from behind", "Damage +8", "Area +25%", "Damage +10", "Extra scratch"],
   (lv, p) => {
     const dmg = 15 + (lv >= 3 ? 8 : 0) + (lv >= 5 ? 10 : 0);
     const amount = 1 + (lv >= 2 ? 1 : 0) + (lv >= 6 ? 1 : 0);
@@ -85,9 +85,9 @@ put(new WeaponDef("graffio", "Graffio Felino",
     }
   }));
 
-put(new WeaponDef("gomitolo", "Gomitolo Rimbalzino",
-  "Una palla di lana indistruttibile che rimbalza per tutto lo schermo.",
-  6, ["+1 gomitolo", "Danno +6", "Durata +1.5s", "+1 gomitolo", "Danno +10, più veloce"],
+put(new WeaponDef("gomitolo", "Bouncy Yarn Ball",
+  "An indestructible ball of yarn that bounces all over the screen.",
+  6, ["+1 yarn ball", "Damage +6", "Duration +1.5s", "+1 yarn ball", "Damage +10, faster"],
   (lv, p) => {
     const dmg = 10 + (lv >= 3 ? 6 : 0) + (lv >= 6 ? 10 : 0);
     const amount = 1 + (lv >= 2 ? 1 : 0) + (lv >= 5 ? 1 : 0);
@@ -113,9 +113,9 @@ put(new WeaponDef("gomitolo", "Gomitolo Rimbalzino",
     playSfx("shoot");
   }));
 
-put(new WeaponDef("pallapelo", "Palla di Pelo",
-  "Il classico felino: lanciata in aria con nonchalance, atterra con devastazione.",
-  6, ["+1 palla", "Danno +12", "Perforazione +3, area +20%", "+1 palla", "Danno +15"],
+put(new WeaponDef("pallapelo", "Hairball",
+  "Tossed nonchalantly into the air, lands with devastation.",
+  6, ["+1 hairball", "Damage +12", "Pierce +3, area +20%", "+1 hairball", "Damage +15"],
   (lv, p) => {
     const dmg = 25 + (lv >= 3 ? 12 : 0) + (lv >= 6 ? 15 : 0);
     const amount = 1 + (lv >= 2 ? 1 : 0) + (lv >= 5 ? 1 : 0);
@@ -143,9 +143,9 @@ put(new WeaponDef("pallapelo", "Palla di Pelo",
     }
   }));
 
-put(new WeaponDef("fusa", "Aura di Fusa",
-  "Le fusa rilassano i gatti e disintegrano i nemici nelle vicinanze.",
-  6, ["Area +15%", "Danno +3", "Area +15%, fusa più rapide", "Danno +4", "Area +20%, fusa più rapide"],
+put(new WeaponDef("fusa", "Purr Aura",
+  "Purring relaxes cats and disintegrates nearby enemies.",
+  6, ["Area +15%", "Damage +3", "Area +15%, faster purr", "Damage +4", "Area +20%, faster purr"],
   (lv, p) => {
     const dmg = 5 + (lv >= 3 ? 3 : 0) + (lv >= 5 ? 4 : 0);
     const tick = 0.5 - (lv >= 4 ? 0.06 : 0) - (lv >= 6 ? 0.08 : 0);
@@ -165,9 +165,9 @@ put(new WeaponDef("fusa", "Aura di Fusa",
     p.auraPulse = 1;
   }));
 
-put(new WeaponDef("miagolio", "Miagolio Sonico",
-  "Un MIAO carico di rancore che attraversa i nemici come un'onda d'urto.",
-  6, ["Danno +8", "+1 onda", "Area +30%", "Danno +10", "+1 onda"],
+put(new WeaponDef("miagolio", "Sonic Meow",
+  "A MEOW packed with fury that tears through enemies like a shockwave.",
+  6, ["Damage +8", "+1 wave", "Area +30%", "Damage +10", "+1 wave"],
   (lv, p) => {
     const dmg = 15 + (lv >= 2 ? 8 : 0) + (lv >= 5 ? 10 : 0);
     const amount = 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0);
@@ -197,9 +197,9 @@ put(new WeaponDef("miagolio", "Miagolio Sonico",
     playSfx("meow");
   }));
 
-put(new WeaponDef("artigli", "Artigli Spettrali",
-  "Artigli luminosi orbitano intorno al gatto, affilati come la sua lingua.",
-  6, ["+1 artiglio", "Danno +5, rotazione più rapida", "Durata +1.2s", "+1 artiglio", "Danno +8, area +20%"],
+put(new WeaponDef("artigli", "Spectral Claws",
+  "Glowing claws orbit the cat, sharp as its tongue.",
+  6, ["+1 claw", "Damage +5, faster spin", "Duration +1.2s", "+1 claw", "Damage +8, area +20%"],
   (lv, p) => {
     const dmg = 8 + (lv >= 3 ? 5 : 0) + (lv >= 6 ? 8 : 0);
     const amount = 2 + (lv >= 2 ? 1 : 0) + (lv >= 5 ? 1 : 0);
@@ -226,9 +226,9 @@ put(new WeaponDef("artigli", "Artigli Spettrali",
   },
   /* addDuration */ true));
 
-put(new WeaponDef("sardine", "Lancio di Sardine",
-  "Sardine balistiche di precisione. Un po' puzzano, ma funzionano.",
-  6, ["+1 sardina", "+1 sardina", "Danno +6", "+1 sardina", "Danno +8, perforazione +1"],
+put(new WeaponDef("sardine", "Sardine Toss",
+  "Precision ballistic sardines. A bit smelly, but they work.",
+  6, ["+1 sardine", "+1 sardine", "Damage +6", "+1 sardine", "Damage +8, pierce +1"],
   (lv, p) => {
     const dmg = 9 + (lv >= 4 ? 6 : 0) + (lv >= 6 ? 8 : 0);
     const amount = 1 + (lv >= 2 ? 1 : 0) + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0);
@@ -257,9 +257,9 @@ put(new WeaponDef("sardine", "Lancio di Sardine",
     playSfx("shoot");
   }));
 
-put(new WeaponDef("croccantini", "Pioggia di Croccantini",
-  "Croccantini esplosivi piovono dal cielo. La pappa è servita.",
-  6, ["+1 croccantino", "Danno +10", "Area +25%", "+2 croccantini", "Danno +15"],
+put(new WeaponDef("croccantini", "Kibble Rain",
+  "Explosive kibble rains from the sky. Dinner is served.",
+  6, ["+1 kibble", "Damage +10", "Area +25%", "+2 kibble", "Damage +15"],
   (lv, p) => {
     const dmg = 20 + (lv >= 3 ? 10 : 0) + (lv >= 6 ? 15 : 0);
     const amount = 2 + (lv >= 2 ? 1 : 0) + (lv >= 5 ? 2 : 0);

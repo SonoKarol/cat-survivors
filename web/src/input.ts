@@ -33,6 +33,10 @@ export class Input {
   readonly isTouch = !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
   // touch: dito sinistro = joystick movimento, dito destro = aim
   isTouchActive = false;
+  // invocato in modo sincrono dentro il gesto di tocco (touchstart): permette di
+  // dare il focus a un input HTML — e quindi far comparire la tastiera software —
+  // cosa che fuori dal gesto utente i browser mobile rifiutano.
+  onTap: ((p: Point) => void) | null = null;
   private leftId: number | null = null;
   private leftOriginX = 0;
   private leftOriginY = 0;
@@ -143,6 +147,8 @@ export class Input {
       // sulla metà sinistra) sono sempre toccabili. Durante il gioco i click non sono
       // usati, quindi è innocuo. La mira (mouseX/Y) la muove solo il dito destro.
       this.click = p;
+      // dentro al gesto: chi ascolta può aprire la tastiera software (codice stanza)
+      if (this.onTap !== null) this.onTap(p);
       if (p.x < w / 2) {
         // metà sinistra → joystick movimento
         if (this.leftId === null) {

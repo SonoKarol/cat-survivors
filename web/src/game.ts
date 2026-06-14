@@ -149,7 +149,7 @@ export class Game {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       if (this.projectiles[i].owner === p) this.projectiles.splice(i, 1);
     }
-    if (this.state !== "LOBBY") this.addFloat(p.x, p.y - 30, p.cat.name + " se n'è andato", Color.rgb(0xffd166));
+    if (this.state !== "LOBBY") this.addFloat(p.x, p.y - 30, p.cat.name + " has left", Color.rgb(0xffd166));
     if (this.leveling === p) { // non bloccare la partita su una scelta orfana
       this.leveling = null;
       this.choices = null;
@@ -290,7 +290,7 @@ export class Game {
   onPlayerDown(p: Player): void {
     p.alive = false;
     p.pendingLevels = 0;
-    this.addFloat(p.x, p.y - 30, p.cat.name + " è KO!", Color.rgb(0xff6b6b));
+    this.addFloat(p.x, p.y - 30, p.cat.name + " is down!", Color.rgb(0xff6b6b));
     this.addParticles(p.x, p.y, Color.rgb(0xb9c4d8), 10);
     for (const q of this.players) if (q.alive) return;
     this.gameOver();
@@ -324,7 +324,7 @@ export class Game {
       this.bossIdx++;
       const b = this.spawnEnemy(bs.type, false);
       const lp = this.localPlayer();
-      if (lp !== null) this.addFloat(lp.x, lp.y - 60, "ATTENZIONE: " + b.def.name + "!", Color.rgb(0xff5b5b));
+      if (lp !== null) this.addFloat(lp.x, lp.y - 60, "WARNING: " + b.def.name + "!", Color.rgb(0xff5b5b));
       playSfx("boss");
       this.shake = 8;
     }
@@ -337,7 +337,7 @@ export class Game {
           const a = TAU / n * i;
           this.spawnEnemyAt("cetriolo", anchor.x + Math.cos(a) * 380, anchor.y + Math.sin(a) * 380, false);
         }
-        this.addFloat(anchor.x, anchor.y - 60, "Accerchiato dai cetrioli!", Color.rgb(0x9ee86a));
+        this.addFloat(anchor.x, anchor.y - 60, "Surrounded by cucumbers!", Color.rgb(0x9ee86a));
       }
     }
   }
@@ -688,18 +688,18 @@ export class Game {
     for (const w of p.weapons) {
       if (w.level < w.def.maxLevel) {
         pool.push(new Choice("weapon", w.def.id, w.def.name, w.def.upgrades[w.level - 1],
-          "Liv. " + (w.level + 1), w.def.id));
+          "Lv. " + (w.level + 1), w.def.id));
       }
     }
     for (const [id, lvl] of p.passives) {
       const d = PASSIVES.get(id)!;
       if (lvl < d.maxLevel) {
-        pool.push(new Choice("passive", d.id, d.name, d.desc, "Liv. " + (lvl + 1), d.id));
+        pool.push(new Choice("passive", d.id, d.name, d.desc, "Lv. " + (lvl + 1), d.id));
       }
     }
     if (p.weapons.length < MAX_WEAPONS) {
       for (const d of WEAPONS.values()) {
-        if (p.getWeapon(d.id) === null) pool.push(new Choice("weapon", d.id, d.name, d.desc, "Nuova arma!", d.id));
+        if (p.getWeapon(d.id) === null) pool.push(new Choice("weapon", d.id, d.name, d.desc, "New weapon!", d.id));
       }
     }
     if (p.passives.size < MAX_PASSIVES) {
@@ -711,8 +711,8 @@ export class Game {
     const n = p.stats.luck >= 1.25 ? 4 : 3;
     const picks = pool.slice(0, Math.min(n, pool.length));
     if (picks.length === 0) {
-      picks.push(new Choice("heal", "", "Coccole", "Recupera 50 PS", "", "heal"));
-      picks.push(new Choice("xp", "", "Croccantino d'Oro", "+30 esperienza", "", "xp"));
+      picks.push(new Choice("heal", "", "Cuddles", "Restore 50 HP", "", "heal"));
+      picks.push(new Choice("xp", "", "Golden Kibble", "+30 experience", "", "xp"));
     }
     return picks;
   }

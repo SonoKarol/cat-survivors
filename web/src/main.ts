@@ -29,6 +29,11 @@ window.addEventListener("resize", resize);
 const input = new Input(canvas);
 const game = new Game(input);
 App.init(game, input);
+// tocco dentro il gesto: se il pannello "Join a friend" è aperto, diamo il focus
+// all'input nascosto per far comparire la tastiera software (codice stanza).
+input.onTap = () => {
+  if (game.state === "MENU" && App.roomActive()) App.focusRoomInput();
+};
 initSfx();
 resize();
 

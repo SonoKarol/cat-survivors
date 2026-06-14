@@ -32,7 +32,7 @@ function findMe(s: Snapshot, pid: number): PlayerS | null {
 
 function levelerName(s: Snapshot): string {
   const p = findMe(s, s.levelingPid);
-  return p !== null ? CATS[p.catIdx].name : "Un amico";
+  return p !== null ? CATS[p.catIdx].name : "A friend";
 }
 
 function handleKeys(c: Client, input: Input): void {
@@ -207,12 +207,12 @@ function drawHud(g: G, s: Snapshot, me: PlayerS | null, w: number, h: number): v
   g.fillRect(0, 16, w, 2);
   g.setFont(Ui.F_HUD);
   g.setColor(Ui.BLUE_LT);
-  g.drawString("LV " + me.level, 12, 36);
+  g.drawString("Lv. " + me.level, 12, 36);
   Ui.center(g, fmt(s.time), Ui.F_TIMER, Ui.GOLD, w / 2, 46);
   g.setColor(Ui.TEXT);
   Ui.right(g, "KO " + s.kills, Ui.F_HUD, w - 12, 36);
   g.setColor(Color.rgb(0xff8c8c));
-  Ui.right(g, "PS " + Math.round(me.hpRatio * 100) + "%", Ui.F_HUD, w - 12, 56);
+  Ui.right(g, "HP " + Math.round(me.hpRatio * 100) + "%", Ui.F_HUD, w - 12, 56);
   if (muted) Ui.right(g, "AUDIO OFF [M]", Ui.F_SMALL, w - 12, 74);
   let sx = 12, sy = 52;
   for (const wi of me.weapons) {
@@ -243,17 +243,17 @@ function drawClientLobby(g: G, s: Snapshot, w: number, h: number): void {
   g.fillRect(0, 0, w, h);
   const box = new Rect(w / 2 - 270, h / 2 - 130, 540, 260);
   Ui.panel(g, box, false);
-  Ui.center(g, "LOBBY CO-OP", Ui.F_H2, Ui.GOLD, w / 2, box.y + 44);
-  Ui.center(g, "Connesso! In attesa che l'host avvii la partita...", Ui.F_TEXT, Ui.TEXT, w / 2, box.y + 76);
+  Ui.center(g, "CO-OP LOBBY", Ui.F_H2, Ui.GOLD, w / 2, box.y + 44);
+  Ui.center(g, "Connected! Waiting for the host to start...", Ui.F_TEXT, Ui.TEXT, w / 2, box.y + 76);
   const n = s.players.length;
-  Ui.center(g, "Gatti pronti (" + n + "/" + Net.MAX_PLAYERS + "):", Ui.F_BOLD, Ui.GREEN_LT, w / 2, box.y + 110);
+  Ui.center(g, "Cats ready (" + n + "/" + Net.MAX_PLAYERS + "):", Ui.F_BOLD, Ui.GREEN_LT, w / 2, box.y + 110);
   const x0 = w / 2 - n * 45 + 22;
   for (let i = 0; i < n; i++) {
     const cat = CATS[s.players[i].catIdx];
     g.ctx.drawImage(Sprites.catBig(cat), x0 + i * 90 - 24, box.y + 124, 48, 48);
     Ui.center(g, cat.name, Ui.F_SMALL, Ui.TEXT, x0 + i * 90, box.y + 186);
   }
-  Ui.center(g, "Prepara gli artigli!", Ui.F_SMALL, Ui.HINT, w / 2, box.y + 226);
+  Ui.center(g, "Sharpen your claws!", Ui.F_SMALL, Ui.HINT, w / 2, box.y + 226);
 }
 
 function drawClientEnd(g: G, s: Snapshot, me: PlayerS | null, w: number, h: number, win: boolean, input: Input): void {
@@ -265,21 +265,21 @@ function drawClientEnd(g: G, s: Snapshot, me: PlayerS | null, w: number, h: numb
     g.setColor(Ui.OVERLAY);
     g.fillRect(0, 0, dw, dh);
     if (win) {
-      Ui.center(g, "VITTORIA!", Ui.F_TITLE, Ui.GOLD, dw / 2, dh / 2 - 130);
-      Ui.center(g, "Dieci minuti, zero bagnetti. Il giardino è di nuovo vostro.", Ui.F_BOLD, Ui.GREEN_LT, dw / 2, dh / 2 - 92);
+      Ui.center(g, "VICTORY!", Ui.F_TITLE, Ui.GOLD, dw / 2, dh / 2 - 130);
+      Ui.center(g, "Ten minutes, zero baths. The garden is yours again.", Ui.F_BOLD, Ui.GREEN_LT, dw / 2, dh / 2 - 92);
     } else {
       Ui.center(g, "GAME OVER", Ui.F_TITLE, Ui.RED_LT, dw / 2, dh / 2 - 130);
-      Ui.center(g, "Il giardino ha avuto la meglio... per stavolta.", Ui.F_BOLD, Ui.GREEN_LT, dw / 2, dh / 2 - 92);
+      Ui.center(g, "The garden won this time... but you'll be back.", Ui.F_BOLD, Ui.GREEN_LT, dw / 2, dh / 2 - 92);
     }
     if (me !== null) {
       const cat = CATS[me.catIdx];
-      Ui.center(g, cat.name + "  •  Livello " + me.level + "  •  KO di squadra: " + s.kills
-        + "  •  Tempo: " + fmt(s.time), Ui.F_TEXT, Ui.TEXT, dw / 2, dh / 2 - 40);
+      Ui.center(g, cat.name + "  •  Level " + me.level + "  •  team KO: " + s.kills
+        + "  •  Time: " + fmt(s.time), Ui.F_TEXT, Ui.TEXT, dw / 2, dh / 2 - 40);
     }
     const hover = btn.contains(mp.x, mp.y);
     g.setColor(hover ? Ui.BTN_HOVER : Ui.GOLD);
     g.fillRoundRect(btn.x, btn.y, btn.width, btn.height, 10);
-    Ui.center(g, "Torna al rifugio (R)", Ui.F_BOLD, Ui.BTN_DARK, btn.x + btn.width / 2, btn.y + 31);
+    Ui.center(g, "Back to shelter (R)", Ui.F_BOLD, Ui.BTN_DARK, btn.x + btn.width / 2, btn.y + 31);
   });
   if (rawClick !== null) {
     const click = Ui.toUi(w, h, rawClick);
@@ -290,7 +290,7 @@ function drawClientEnd(g: G, s: Snapshot, me: PlayerS | null, w: number, h: numb
 function drawMessage(g: G, w: number, h: number, title: string, sub: string, error: boolean): void {
   Ui.center(g, title, Ui.F_H2, error ? Ui.RED_LT : Ui.GOLD, w / 2, h / 2 - 20);
   Ui.center(g, sub, Ui.F_TEXT, Ui.TEXT, w / 2, h / 2 + 12);
-  Ui.center(g, error ? "R o clic per tornare al menu" : "Aspetta che l'host avvii la partita",
+  Ui.center(g, error ? "R or click to return to menu" : "Waiting for the host to start",
     Ui.F_SMALL, Ui.HINT, w / 2, h / 2 + 44);
 }
 
@@ -356,7 +356,7 @@ export function clientFrame(c: Client, input: Input, g: G, w: number, h: number)
 
   switch (s.state) {
     case ST_LOBBY: Ui.withUiFit(g, w, h, () => drawClientLobby(g, s, Ui.DESIGN_W, Ui.DESIGN_H)); break;
-    case ST_PAUSED: Ui.center(g, "PAUSA (host)", Ui.F_H2, Ui.GOLD, w / 2, h / 2); break;
+    case ST_PAUSED: Ui.center(g, "PAUSE (host)", Ui.F_H2, Ui.GOLD, w / 2, h / 2); break;
     case ST_LEVELUP: {
       const cs = c.choices;
       if (cs !== null) {
@@ -366,7 +366,7 @@ export function clientFrame(c: Client, input: Input, g: G, w: number, h: number)
         Ui.withUiFit(g, w, h, () => {
           g.setColor(new Color(8, 14, 9, 190));
           g.fillRect(0, 0, Ui.DESIGN_W, Ui.DESIGN_H);
-          Ui.center(g, "MIAO! Scegli un potenziamento (clic o 1-" + cs.length + ")", Ui.F_H2, Ui.GOLD, Ui.DESIGN_W / 2, Ui.DESIGN_H / 2 - 140);
+          Ui.center(g, "MEOW! Choose an upgrade (click or 1-" + cs.length + ")", Ui.F_H2, Ui.GOLD, Ui.DESIGN_W / 2, Ui.DESIGN_H / 2 - 140);
           Ui.drawChoiceCards(g, cs, mp.x, mp.y, Ui.DESIGN_W, Ui.DESIGN_H);
         });
         if (rawClick !== null) {
@@ -378,8 +378,8 @@ export function clientFrame(c: Client, input: Input, g: G, w: number, h: number)
         }
       } else {
         const who = levelerName(s);
-        Ui.center(g, who + " sta scegliendo un potenziamento...", Ui.F_H2, Ui.GOLD, w / 2, h / 2 - 10);
-        Ui.center(g, "(il mondo trattiene il fiato)", Ui.F_TEXT, Ui.HINT, w / 2, h / 2 + 22);
+        Ui.center(g, who + " is choosing an upgrade...", Ui.F_H2, Ui.GOLD, w / 2, h / 2 - 10);
+        Ui.center(g, "(the world holds its breath)", Ui.F_TEXT, Ui.HINT, w / 2, h / 2 + 22);
       }
       break;
     }
